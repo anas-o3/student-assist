@@ -15,7 +15,9 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      fontFamily: 'Tajawal',
       scaffoldBackgroundColor: background,
+
       colorScheme: ColorScheme.fromSeed(
         seedColor: primary,
         brightness: Brightness.light,
@@ -23,17 +25,20 @@ class AppTheme {
         error: error,
         surface: card,
       ),
+
       appBarTheme: const AppBarTheme(
         backgroundColor: background,
         foregroundColor: textPrimary,
         elevation: 0,
         centerTitle: true,
       ),
+
       cardTheme: const CardThemeData(
         color: card,
         elevation: 0,
         margin: EdgeInsets.zero,
       ),
+
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: card,
@@ -54,6 +59,7 @@ class AppTheme {
           ),
         ),
       ),
+
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
@@ -64,6 +70,7 @@ class AppTheme {
           ),
         ),
       ),
+
       textTheme: const TextTheme(
         bodyLarge: TextStyle(
           color: textPrimary,

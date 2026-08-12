@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
-import '../../widgets/app_logo.dart';
 import '../../widgets/app_password_field.dart';
-import 'register_screen.dart';
 
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatelessWidget {
+  const RegisterScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +27,7 @@ class LoginScreen extends StatelessWidget {
                     child: Container(
                       width: double.infinity,
                       constraints: const BoxConstraints(maxWidth: 360),
-                      padding: const EdgeInsets.fromLTRB(32, 48, 32, 30),
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 26),
                       decoration: BoxDecoration(
                         color: AppTheme.card,
                         borderRadius: BorderRadius.circular(14),
@@ -45,84 +43,70 @@ class LoginScreen extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Align(child: AppLogo(width: 112)),
-                          const SizedBox(height: 20),
                           const Text(
-                            'مساعد طلبة الثانوية',
+                            'إنشاء حساب جديد',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppTheme.primary,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w700,
-                              height: 1.25,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          const Text(
-                            'مرحباً بعودتك',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppTheme.textPrimary,
                               fontSize: 24,
                               fontWeight: FontWeight.w700,
                               height: 1.3,
                             ),
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 7),
                           const Text(
-                            'سجل دخولك لمتابعة دراستك',
+                            'انضم إلينا وابدأ رحلة نجاحك التعليمية',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: AppTheme.textSecondary,
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.w400,
                               height: 1.5,
                             ),
                           ),
-                          const SizedBox(height: 31),
+                          const SizedBox(height: 27),
+                          const _FieldLabel('الاسم الكامل'),
+                          const SizedBox(height: 7),
+                          const TextField(
+                            keyboardType: TextInputType.name,
+                            textInputAction: TextInputAction.next,
+                            decoration: InputDecoration(
+                              hintText: 'أدخل اسمك الكامل',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                          ),
+                          const SizedBox(height: 17),
                           const _FieldLabel('البريد الإلكتروني'),
                           const SizedBox(height: 7),
-                          TextField(
+                          const TextField(
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
                             textDirection: TextDirection.ltr,
                             textAlign: TextAlign.right,
-                            decoration: const InputDecoration(
-                              hintText: 'أدخل بريدك الإلكتروني',
+                            decoration: InputDecoration(
+                              hintText: 'example@school.com',
                               prefixIcon: Icon(Icons.email_outlined),
                             ),
                           ),
-                          const SizedBox(height: 21),
+                          const SizedBox(height: 17),
                           const _FieldLabel('كلمة المرور'),
                           const SizedBox(height: 7),
                           const AppPasswordField(
-                            hintText: 'أدخل كلمة المرور',
+                            hintText: '••••••••',
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const SizedBox(height: 17),
+                          const _FieldLabel('تأكيد كلمة المرور'),
+                          const SizedBox(height: 7),
+                          const AppPasswordField(
+                            hintText: '••••••••',
                             textInputAction: TextInputAction.done,
+                            showPasswordTooltip: 'إظهار تأكيد كلمة المرور',
+                            hidePasswordTooltip: 'إخفاء تأكيد كلمة المرور',
                           ),
-                          Align(
-                            alignment: AlignmentDirectional.centerStart,
-                            child: TextButton(
-                              onPressed: () {},
-                              style: TextButton.styleFrom(
-                                foregroundColor: AppTheme.primary,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text(
-                                'نسيت كلمة المرور؟',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 24),
                           SizedBox(
-                            height: 60,
+                            height: 52,
                             child: ElevatedButton(
                               onPressed: () {},
                               style: ElevatedButton.styleFrom(
@@ -139,42 +123,38 @@ class LoginScreen extends StatelessWidget {
                                 children: [
                                   Center(
                                     child: Text(
-                                      'تسجيل الدخول',
+                                      'إنشاء الحساب',
                                       style: TextStyle(
-                                        fontSize: 20,
+                                        fontSize: 17,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ),
                                   Align(
                                     alignment: AlignmentDirectional.centerEnd,
-                                    child: Icon(Icons.login_rounded, size: 25),
+                                    child: Icon(
+                                      Icons.arrow_back_rounded,
+                                      size: 24,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 18),
                           Wrap(
                             alignment: WrapAlignment.center,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               const Text(
-                                'ليس لديك حساب؟',
+                                'لديك حساب بالفعل؟',
                                 style: TextStyle(
                                   color: AppTheme.textSecondary,
                                   fontSize: 15,
                                 ),
                               ),
                               TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (context) =>
-                                          const RegisterScreen(),
-                                    ),
-                                  );
-                                },
+                                onPressed: () => Navigator.of(context).pop(),
                                 style: TextButton.styleFrom(
                                   foregroundColor: AppTheme.primary,
                                   padding: const EdgeInsets.symmetric(
@@ -186,7 +166,7 @@ class LoginScreen extends StatelessWidget {
                                       MaterialTapTargetSize.shrinkWrap,
                                 ),
                                 child: const Text(
-                                  'إنشاء حساب جديد',
+                                  'تسجيل الدخول',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,

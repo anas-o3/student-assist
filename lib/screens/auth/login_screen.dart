@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../widgets/app_logo.dart';
 import '../../widgets/app_password_field.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatelessWidget {
@@ -102,7 +103,14 @@ class LoginScreen extends StatelessWidget {
                           Align(
                             alignment: AlignmentDirectional.centerStart,
                             child: TextButton(
-                              onPressed: () {},
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (context) =>
+                                        const ForgotPasswordScreen(),
+                                  ),
+                                );
+                              },
                               style: TextButton.styleFrom(
                                 foregroundColor: AppTheme.primary,
                                 padding: const EdgeInsets.symmetric(

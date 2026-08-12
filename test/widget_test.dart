@@ -41,4 +41,26 @@ void main() {
     expect(find.text('تأكيد كلمة المرور'), findsOneWidget);
     expect(find.text('إنشاء الحساب'), findsOneWidget);
   });
+
+  testWidgets('Forgot password link opens the recovery screen', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const StudentAssistApp());
+
+    final forgotPasswordLink = find.text('نسيت كلمة المرور؟');
+    await tester.ensureVisible(forgotPasswordLink);
+    await tester.pumpAndSettle();
+    await tester.tap(forgotPasswordLink);
+    await tester.pumpAndSettle();
+
+    expect(find.text('استعادة كلمة المرور'), findsOneWidget);
+    expect(find.text('البريد الإلكتروني'), findsOneWidget);
+    expect(find.text('إرسال رابط الاستعادة'), findsOneWidget);
+    expect(find.text('العودة لتسجيل الدخول'), findsOneWidget);
+
+    await tester.tap(find.text('العودة لتسجيل الدخول'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مرحباً بعودتك'), findsOneWidget);
+  });
 }

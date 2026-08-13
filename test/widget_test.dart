@@ -1,11 +1,14 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:student_assist/app/app.dart';
 import 'package:student_assist/app/theme.dart';
+import 'package:student_assist/repositories/user_repository.dart';
 import 'package:student_assist/screens/auth/forgot_password_screen.dart';
 import 'package:student_assist/screens/auth/login_screen.dart';
 import 'package:student_assist/screens/auth/register_screen.dart';
 import 'package:student_assist/services/auth_service.dart';
+import 'package:student_assist/services/user_service.dart';
 
 void main() {
   testWidgets('Student Assist app loads successfully', (
@@ -92,6 +95,133 @@ void main() {
     );
   });
 
+  test('Student profile data uses the approved Firestore schema', () {
+    final data = UserRepository.studentProfileData(
+      uid: 'student-uid',
+      name: 'طالب تجريبي',
+      email: 'student@example.com',
+    );
+
+    expect(data.keys.toSet(), {
+      'userId',
+      'name',
+      'email',
+      'role',
+      'gradeId',
+      'createdAt',
+    });
+    expect(data['userId'], 'student-uid');
+    expect(data['name'], 'طالب تجريبي');
+    expect(data['email'], 'student@example.com');
+    expect(data['role'], 'student');
+    expect(data['gradeId'], isNull);
+    expect(data['createdAt'], isA<FieldValue>());
+  });
+
+  test('UserService delegates profile creation to UserRepository', () async {
+    final repository = _FakeUserRepository();
+    final userService = UserService(repository);
+
+    await userService.createStudentProfile(
+      uid: 'student-uid',
+      name: 'طالب تجريبي',
+      email: 'student@example.com',
+    );
+
+    expect(repository.createCalls, 1);
+    expect(repository.lastUid, 'student-uid');
+    expect(repository.lastName, 'طالب تجريبي');
+    expect(repository.lastEmail, 'student@example.com');
+  });
+
+  test('Registration creates the matching Firestore profile', () async {
+    final userService = _FakeUserService();
+    final authService = AuthService(
+      null,
+      userService,
+      ({required email, required password}) async => RegisteredAuthUser(
+        uid: 'student-uid',
+        email: email,
+        delete: () async {},
+      ),
+    );
+
+    await authService.register(
+      name: 'طالب تجريبي',
+      email: 'student@example.com',
+      password: 'secret-password',
+    );
+
+    expect(userService.createCalls, 1);
+    expect(userService.lastUid, 'student-uid');
+    expect(userService.lastName, 'طالب تجريبي');
+    expect(userService.lastEmail, 'student@example.com');
+  });
+
+  test('Profile failure rolls back the newly-created Auth account', () async {
+    final userService = _FakeUserService(shouldFail: true);
+    var deleted = false;
+    final authService = AuthService(
+      null,
+      userService,
+      ({required email, required password}) async => RegisteredAuthUser(
+        uid: 'student-uid',
+        email: email,
+        delete: () async => deleted = true,
+      ),
+    );
+
+    await expectLater(
+      authService.register(
+        name: 'طالب تجريبي',
+        email: 'student@example.com',
+        password: 'secret-password',
+      ),
+      throwsA(
+        isA<AuthFailure>().having(
+          (error) => error.message,
+          'message',
+          contains('لم يكتمل إنشاء الحساب'),
+        ),
+      ),
+    );
+    expect(deleted, isTrue);
+  });
+
+  test('Rollback failure reports the incomplete account safely', () async {
+    final userService = _FakeUserService(shouldFail: true);
+    final authService = AuthService(
+      null,
+      userService,
+      ({required email, required password}) async => RegisteredAuthUser(
+        uid: 'student-uid',
+        email: email,
+        delete: () async => throw Exception('private backend detail'),
+      ),
+    );
+
+    await expectLater(
+      authService.register(
+        name: 'طالب تجريبي',
+        email: 'student@example.com',
+        password: 'secret-password',
+      ),
+      throwsA(
+        isA<AuthFailure>()
+            .having(
+              (error) => error.message,
+              'message',
+              contains('تم إنشاء حساب الدخول'),
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              isNot(contains('private backend detail')),
+            ),
+      ),
+    );
+  });
+
   testWidgets('Login submits trimmed email through AuthService', (
     WidgetTester tester,
   ) async {
@@ -131,6 +261,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(authService.registerCalls, 1);
+    expect(authService.lastName, 'طالب تجريبي');
     expect(authService.lastEmail, 'student@example.com');
     expect(authService.lastPassword, 'secret-password');
     expect(find.text('تم إنشاء الحساب بنجاح.'), findsOneWidget);
@@ -175,13 +306,16 @@ class _FakeAuthService extends AuthService {
   int resetCalls = 0;
   String? lastEmail;
   String? lastPassword;
+  String? lastName;
 
   @override
   Future<void> register({
+    required String name,
     required String email,
     required String password,
   }) async {
     registerCalls++;
+    lastName = name;
     lastEmail = email;
     lastPassword = password;
   }
@@ -197,5 +331,47 @@ class _FakeAuthService extends AuthService {
   Future<void> sendPasswordResetEmail({required String email}) async {
     resetCalls++;
     lastEmail = email;
+  }
+}
+
+class _FakeUserRepository extends UserRepository {
+  int createCalls = 0;
+  String? lastUid;
+  String? lastName;
+  String? lastEmail;
+
+  @override
+  Future<void> createStudentProfile({
+    required String uid,
+    required String name,
+    required String email,
+  }) async {
+    createCalls++;
+    lastUid = uid;
+    lastName = name;
+    lastEmail = email;
+  }
+}
+
+class _FakeUserService extends UserService {
+  _FakeUserService({this.shouldFail = false});
+
+  final bool shouldFail;
+  int createCalls = 0;
+  String? lastUid;
+  String? lastName;
+  String? lastEmail;
+
+  @override
+  Future<void> createStudentProfile({
+    required String uid,
+    required String name,
+    required String email,
+  }) async {
+    createCalls++;
+    lastUid = uid;
+    lastName = name;
+    lastEmail = email;
+    if (shouldFail) throw const UserProfileFailure();
   }
 }

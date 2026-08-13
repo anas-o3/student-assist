@@ -54,7 +54,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await _authService.register(email: email, password: password);
+      await _authService.register(name: name, email: email, password: password);
       if (!mounted) return;
       _showMessage('تم إنشاء الحساب بنجاح.', isSuccess: true);
     } on AuthFailure catch (error) {

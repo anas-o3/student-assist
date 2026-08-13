@@ -5,12 +5,16 @@ class AppPasswordField extends StatefulWidget {
     super.key,
     required this.hintText,
     required this.textInputAction,
+    this.controller,
+    this.enabled = true,
     this.showPasswordTooltip = 'إظهار كلمة المرور',
     this.hidePasswordTooltip = 'إخفاء كلمة المرور',
   });
 
   final String hintText;
   final TextInputAction textInputAction;
+  final TextEditingController? controller;
+  final bool enabled;
   final String showPasswordTooltip;
   final String hidePasswordTooltip;
 
@@ -24,6 +28,8 @@ class _AppPasswordFieldState extends State<AppPasswordField> {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: widget.controller,
+      enabled: widget.enabled,
       obscureText: !_isPasswordVisible,
       textInputAction: widget.textInputAction,
       textDirection: TextDirection.ltr,
@@ -35,11 +41,13 @@ class _AppPasswordFieldState extends State<AppPasswordField> {
           tooltip: _isPasswordVisible
               ? widget.hidePasswordTooltip
               : widget.showPasswordTooltip,
-          onPressed: () {
-            setState(() {
-              _isPasswordVisible = !_isPasswordVisible;
-            });
-          },
+          onPressed: widget.enabled
+              ? () {
+                  setState(() {
+                    _isPasswordVisible = !_isPasswordVisible;
+                  });
+                }
+              : null,
           icon: Icon(
             _isPasswordVisible
                 ? Icons.visibility_outlined

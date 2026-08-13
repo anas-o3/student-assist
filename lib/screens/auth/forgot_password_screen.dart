@@ -1,9 +1,70 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../services/auth_service.dart';
 
-class ForgotPasswordScreen extends StatelessWidget {
-  const ForgotPasswordScreen({super.key});
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key, this.authService});
+
+  final AuthService? authService;
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final _emailController = TextEditingController();
+  AuthService? _defaultAuthService;
+  bool _isLoading = false;
+
+  AuthService get _authService =>
+      widget.authService ?? (_defaultAuthService ??= AuthService());
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendResetEmail() async {
+    if (_isLoading) return;
+
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showMessage('يرجى إدخال البريد الإلكتروني.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _authService.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      _showMessage(
+        'تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني.',
+        isSuccess: true,
+      );
+    } on AuthFailure catch (error) {
+      if (!mounted) return;
+      _showMessage(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage('تعذر إكمال العملية. حاول مرة أخرى.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showMessage(String message, {bool isSuccess = false}) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isSuccess ? AppTheme.success : AppTheme.error,
+        ),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,12 +151,14 @@ class ForgotPasswordScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 7),
-                          const TextField(
+                          TextField(
+                            controller: _emailController,
+                            enabled: !_isLoading,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.done,
                             textDirection: TextDirection.ltr,
                             textAlign: TextAlign.right,
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               hintText: 'example@school.edu',
                               prefixIcon: Icon(Icons.email_outlined),
                             ),
@@ -104,7 +167,7 @@ class ForgotPasswordScreen extends StatelessWidget {
                           SizedBox(
                             height: 58,
                             child: ElevatedButton(
-                              onPressed: () {},
+                              onPressed: _isLoading ? null : _sendResetEmail,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppTheme.primary,
                                 foregroundColor: AppTheme.card,
@@ -114,30 +177,44 @@ class ForgotPasswordScreen extends StatelessWidget {
                                   alpha: 0.24,
                                 ),
                               ),
-                              child: const Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Center(
-                                    child: Text(
-                                      'إرسال رابط الاستعادة',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w500,
+                              child: _isLoading
+                                  ? const SizedBox.square(
+                                      dimension: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        color: AppTheme.card,
                                       ),
+                                    )
+                                  : const Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Center(
+                                          child: Text(
+                                            'إرسال رابط الاستعادة',
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        Align(
+                                          alignment:
+                                              AlignmentDirectional.centerEnd,
+                                          child: Icon(
+                                            Icons.send_rounded,
+                                            size: 22,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                  Align(
-                                    alignment: AlignmentDirectional.centerEnd,
-                                    child: Icon(Icons.send_rounded, size: 22),
-                                  ),
-                                ],
-                              ),
                             ),
                           ),
                           const SizedBox(height: 24),
                           Align(
                             child: TextButton.icon(
-                              onPressed: () => Navigator.of(context).pop(),
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
                               style: TextButton.styleFrom(
                                 foregroundColor: AppTheme.primary,
                                 padding: const EdgeInsets.symmetric(

@@ -53,6 +53,7 @@ app.*.map.json
 
 # Firebase credentials and generated app configuration
 .firebase/
+firebase.json
 *service-account*.json
 *service_account*.json
 *serviceAccount*.json

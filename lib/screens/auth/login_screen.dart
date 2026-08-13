@@ -1,13 +1,74 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/app_logo.dart';
 import '../../widgets/app_password_field.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key, this.authService});
+
+  final AuthService? authService;
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  AuthService? _defaultAuthService;
+  bool _isLoading = false;
+
+  AuthService get _authService =>
+      widget.authService ?? (_defaultAuthService ??= AuthService());
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    if (_isLoading) return;
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage('يرجى إدخال البريد الإلكتروني وكلمة المرور.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await _authService.signIn(email: email, password: password);
+      if (!mounted) return;
+      _showMessage('تم تسجيل الدخول بنجاح.', isSuccess: true);
+    } on AuthFailure catch (error) {
+      if (!mounted) return;
+      _showMessage(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage('تعذر إكمال العملية. حاول مرة أخرى.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showMessage(String message, {bool isSuccess = false}) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isSuccess ? AppTheme.success : AppTheme.error,
+        ),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +145,8 @@ class LoginScreen extends StatelessWidget {
                           const _FieldLabel('البريد الإلكتروني'),
                           const SizedBox(height: 7),
                           TextField(
+                            controller: _emailController,
+                            enabled: !_isLoading,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
                             textDirection: TextDirection.ltr,
@@ -96,21 +159,27 @@ class LoginScreen extends StatelessWidget {
                           const SizedBox(height: 21),
                           const _FieldLabel('كلمة المرور'),
                           const SizedBox(height: 7),
-                          const AppPasswordField(
+                          AppPasswordField(
+                            controller: _passwordController,
+                            enabled: !_isLoading,
                             hintText: 'أدخل كلمة المرور',
                             textInputAction: TextInputAction.done,
                           ),
                           Align(
                             alignment: AlignmentDirectional.centerStart,
                             child: TextButton(
-                              onPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (context) =>
-                                        const ForgotPasswordScreen(),
-                                  ),
-                                );
-                              },
+                              onPressed: _isLoading
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (context) =>
+                                              ForgotPasswordScreen(
+                                                authService: widget.authService,
+                                              ),
+                                        ),
+                                      );
+                                    },
                               style: TextButton.styleFrom(
                                 foregroundColor: AppTheme.primary,
                                 padding: const EdgeInsets.symmetric(
@@ -132,7 +201,7 @@ class LoginScreen extends StatelessWidget {
                           SizedBox(
                             height: 60,
                             child: ElevatedButton(
-                              onPressed: () {},
+                              onPressed: _isLoading ? null : _signIn,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppTheme.primary,
                                 foregroundColor: AppTheme.card,
@@ -142,24 +211,36 @@ class LoginScreen extends StatelessWidget {
                                   alpha: 0.24,
                                 ),
                               ),
-                              child: const Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Center(
-                                    child: Text(
-                                      'تسجيل الدخول',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w500,
+                              child: _isLoading
+                                  ? const SizedBox.square(
+                                      dimension: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        color: AppTheme.card,
                                       ),
+                                    )
+                                  : const Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Center(
+                                          child: Text(
+                                            'تسجيل الدخول',
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        Align(
+                                          alignment:
+                                              AlignmentDirectional.centerEnd,
+                                          child: Icon(
+                                            Icons.login_rounded,
+                                            size: 25,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                  Align(
-                                    alignment: AlignmentDirectional.centerEnd,
-                                    child: Icon(Icons.login_rounded, size: 25),
-                                  ),
-                                ],
-                              ),
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -175,14 +256,19 @@ class LoginScreen extends StatelessWidget {
                                 ),
                               ),
                               TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (context) =>
-                                          const RegisterScreen(),
-                                    ),
-                                  );
-                                },
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (context) =>
+                                                RegisterScreen(
+                                                  authService:
+                                                      widget.authService,
+                                                ),
+                                          ),
+                                        );
+                                      },
                                 style: TextButton.styleFrom(
                                   foregroundColor: AppTheme.primary,
                                   padding: const EdgeInsets.symmetric(

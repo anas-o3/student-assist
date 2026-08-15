@@ -1,15 +1,55 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/user_profile.dart';
+
+enum UserRepositoryFailureReason { missingProfile, invalidData, backend }
+
 class UserRepositoryFailure implements Exception {
-  const UserRepositoryFailure();
+  const UserRepositoryFailure([
+    this.reason = UserRepositoryFailureReason.backend,
+  ]);
+
+  final UserRepositoryFailureReason reason;
 }
 
+typedef UserDocumentLoader = Future<Map<String, dynamic>?> Function(String uid);
+
 class UserRepository {
-  UserRepository([this._firestore]);
+  UserRepository([this._firestore, this._userDocumentLoader]);
 
   final FirebaseFirestore? _firestore;
+  final UserDocumentLoader? _userDocumentLoader;
 
   FirebaseFirestore get _database => _firestore ?? FirebaseFirestore.instance;
+
+  Future<UserProfile> getUser(String uid) async {
+    try {
+      final data = await _loadUserDocument(uid);
+      if (data == null) {
+        throw const UserRepositoryFailure(
+          UserRepositoryFailureReason.missingProfile,
+        );
+      }
+
+      return profileFromFirestore(documentId: uid, data: data);
+    } on UserRepositoryFailure {
+      rethrow;
+    } on FormatException {
+      throw const UserRepositoryFailure(
+        UserRepositoryFailureReason.invalidData,
+      );
+    } on FirebaseException {
+      throw const UserRepositoryFailure();
+    }
+  }
+
+  Future<Map<String, dynamic>?> _loadUserDocument(String uid) async {
+    final loader = _userDocumentLoader;
+    if (loader != null) return loader(uid);
+
+    final document = await _database.collection('users').doc(uid).get();
+    return document.data();
+  }
 
   Future<void> createStudentProfile({
     required String uid,
@@ -61,5 +101,21 @@ class UserRepository {
 
   static Map<String, Object> gradeSelectionData(String gradeId) {
     return {'gradeId': gradeId};
+  }
+
+  static UserProfile profileFromFirestore({
+    required String documentId,
+    required Map<String, dynamic> data,
+  }) {
+    final createdAt = data['createdAt'];
+    if (createdAt is! Timestamp) {
+      throw const FormatException('Invalid user profile timestamp.');
+    }
+
+    return UserProfile.fromFirestore(
+      documentId: documentId,
+      data: data,
+      createdAt: createdAt.toDate().toUtc(),
+    );
   }
 }

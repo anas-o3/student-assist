@@ -42,6 +42,8 @@ class AuthService {
   UserService get _users =>
       _userService ?? (_defaultUserService ??= UserService());
 
+  String? get currentUserUid => _auth.currentUser?.uid;
+
   Future<void> register({
     required String name,
     required String email,

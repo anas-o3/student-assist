@@ -28,6 +28,20 @@ class UserRepository {
     }
   }
 
+  Future<void> updateGradeId({
+    required String uid,
+    required String gradeId,
+  }) async {
+    try {
+      await _database
+          .collection('users')
+          .doc(uid)
+          .update(gradeSelectionData(gradeId));
+    } on FirebaseException {
+      throw const UserRepositoryFailure();
+    }
+  }
+
   static Map<String, Object?> studentProfileData({
     required String uid,
     required String name,
@@ -43,5 +57,9 @@ class UserRepository {
       'gradeId': null,
       'createdAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  static Map<String, Object> gradeSelectionData(String gradeId) {
+    return {'gradeId': gradeId};
   }
 }

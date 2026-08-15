@@ -32,9 +32,36 @@ service cloud.firestore {
                     && request.resource.data.gradeId == null
                     && request.resource.data.createdAt == request.time;
 
-      // Updates remain denied until grade selection defines the controlled
-      // gradeId update. In particular, users cannot change their role.
-      allow update, delete: if false;
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && resource.data.userId == request.auth.uid
+                    && resource.data.role == 'student'
+                    && request.resource.data.diff(resource.data)
+                        .affectedKeys().hasOnly(['gradeId'])
+                    && resource.data.gradeId == null
+                    && request.resource.data.gradeId is string
+                    && request.resource.data.gradeId.size() > 0
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.name == resource.data.name
+                    && request.resource.data.email == resource.data.email
+                    && request.resource.data.role == resource.data.role
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && exists(
+                      /databases/$(database)/documents/grades/$(request.resource.data.gradeId)
+                    )
+                    && get(
+                      /databases/$(database)/documents/grades/$(request.resource.data.gradeId)
+                    ).data.isActive == true;
+
+      allow delete: if false;
+    }
+
+    match /grades/{gradeId} {
+      allow read: if request.auth != null
+                  && resource.data.isActive == true;
+
+      // Grade management by administrators is intentionally deferred.
+      allow create, update, delete: if false;
     }
 
     // Collections not implemented yet remain closed in Production mode.

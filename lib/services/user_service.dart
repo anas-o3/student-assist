@@ -4,6 +4,12 @@ class UserProfileFailure implements Exception {
   const UserProfileFailure();
 }
 
+class UserGradeSelectionFailure implements Exception {
+  const UserGradeSelectionFailure(this.message);
+
+  final String message;
+}
+
 class UserService {
   UserService([this._userRepository]);
 
@@ -22,6 +28,24 @@ class UserService {
       await _users.createStudentProfile(uid: uid, name: name, email: email);
     } on UserRepositoryFailure {
       throw const UserProfileFailure();
+    }
+  }
+
+  Future<void> selectGrade({
+    required String uid,
+    required String gradeId,
+  }) async {
+    final normalizedGradeId = gradeId.trim();
+    if (normalizedGradeId.isEmpty) {
+      throw const UserGradeSelectionFailure('يرجى اختيار الصف الدراسي.');
+    }
+
+    try {
+      await _users.updateGradeId(uid: uid, gradeId: normalizedGradeId);
+    } on UserRepositoryFailure {
+      throw const UserGradeSelectionFailure(
+        'تعذر حفظ الصف الدراسي. حاول مرة أخرى.',
+      );
     }
   }
 }

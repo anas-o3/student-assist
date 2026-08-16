@@ -6,6 +6,9 @@ import '../../services/auth_service.dart';
 import '../../services/grade_service.dart';
 import '../../services/user_service.dart';
 import '../../widgets/app_logo.dart';
+import 'student_home_screen.dart';
+
+typedef StudentHomeScreenBuilder = Widget Function(String gradeId);
 
 class GradeSelectionScreen extends StatefulWidget {
   const GradeSelectionScreen({
@@ -13,11 +16,13 @@ class GradeSelectionScreen extends StatefulWidget {
     this.gradeService,
     this.userService,
     this.authService,
+    this.studentHomeScreenBuilder,
   });
 
   final GradeService? gradeService;
   final UserService? userService;
   final AuthService? authService;
+  final StudentHomeScreenBuilder? studentHomeScreenBuilder;
 
   @override
   State<GradeSelectionScreen> createState() => _GradeSelectionScreenState();
@@ -103,7 +108,13 @@ class _GradeSelectionScreenState extends State<GradeSelectionScreen> {
         _isSaving = false;
         _selectionCompleted = true;
       });
-      _showMessage('تم حفظ صفك الدراسي بنجاح.', isSuccess: true);
+      Navigator.of(context).pushReplacement<void, void>(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              widget.studentHomeScreenBuilder?.call(gradeId) ??
+              StudentHomeScreen(gradeId: gradeId),
+        ),
+      );
     } on UserGradeSelectionFailure catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);

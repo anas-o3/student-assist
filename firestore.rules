@@ -64,6 +64,20 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /subjects/{subjectId} {
+      allow read: if request.auth != null
+                  && resource.data.isActive == true
+                  && exists(
+                    /databases/$(database)/documents/users/$(request.auth.uid)
+                  )
+                  && get(
+                    /databases/$(database)/documents/users/$(request.auth.uid)
+                  ).data.gradeId == resource.data.gradeId;
+
+      // Subject management by administrators is intentionally deferred.
+      allow create, update, delete: if false;
+    }
+
     // Collections not implemented yet remain closed in Production mode.
     match /{document=**} {
       allow read, write: if false;

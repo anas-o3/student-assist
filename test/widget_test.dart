@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:student_assist/app/app.dart';
 import 'package:student_assist/app/theme.dart';
+import 'package:student_assist/models/user_profile.dart';
 import 'package:student_assist/repositories/user_repository.dart';
 import 'package:student_assist/screens/auth/forgot_password_screen.dart';
 import 'package:student_assist/screens/auth/login_screen.dart';
@@ -226,7 +227,15 @@ void main() {
     WidgetTester tester,
   ) async {
     final authService = _FakeAuthService();
-    await _pumpAuthScreen(tester, LoginScreen(authService: authService));
+    await _pumpAuthScreen(
+      tester,
+      LoginScreen(
+        authService: authService,
+        userService: _FakeUserService(),
+        studentHomeScreenBuilder: (gradeId) =>
+            Scaffold(body: Text('student-home-$gradeId')),
+      ),
+    );
 
     await tester.enterText(
       find.byType(TextField).at(0),
@@ -241,7 +250,7 @@ void main() {
     expect(authService.signInCalls, 1);
     expect(authService.lastEmail, 'student@example.com');
     expect(authService.lastPassword, 'secret-password');
-    expect(find.text('تم تسجيل الدخول بنجاح.'), findsOneWidget);
+    expect(find.text('student-home-grade-1'), findsOneWidget);
   });
 
   testWidgets('Register creates a student account through AuthService', (
@@ -309,6 +318,9 @@ class _FakeAuthService extends AuthService {
   String? lastName;
 
   @override
+  String? get currentUserUid => 'student-uid';
+
+  @override
   Future<void> register({
     required String name,
     required String email,
@@ -361,6 +373,18 @@ class _FakeUserService extends UserService {
   String? lastUid;
   String? lastName;
   String? lastEmail;
+
+  @override
+  Future<UserProfile> getUserProfile(String uid) async {
+    return UserProfile(
+      userId: uid,
+      name: 'طالب تجريبي',
+      email: 'student@example.com',
+      role: 'student',
+      gradeId: 'grade-1',
+      createdAt: DateTime.utc(2026),
+    );
+  }
 
   @override
   Future<void> createStudentProfile({

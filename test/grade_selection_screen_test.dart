@@ -5,8 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:student_assist/app/theme.dart';
 import 'package:student_assist/models/grade.dart';
 import 'package:student_assist/screens/student/grade_selection_screen.dart';
+import 'package:student_assist/screens/student/student_home_screen.dart';
 import 'package:student_assist/services/auth_service.dart';
 import 'package:student_assist/services/grade_service.dart';
+import 'package:student_assist/services/subject_service.dart';
 import 'package:student_assist/services/user_service.dart';
 
 void main() {
@@ -88,8 +90,12 @@ void main() {
     expect(userService.selectCalls, 1);
     expect(userService.lastUid, 'authenticated-student');
     expect(userService.lastGradeId, 'grade-2');
-    expect(find.byKey(const Key('grade-selection-success')), findsOneWidget);
-    expect(find.text('تم حفظ صفك الدراسي بنجاح.'), findsWidgets);
+    expect(find.byType(StudentHomeScreen), findsOneWidget);
+    expect(
+      tester.widget<StudentHomeScreen>(find.byType(StudentHomeScreen)).gradeId,
+      'grade-2',
+    );
+    expect(find.byType(GradeSelectionScreen), findsNothing);
   });
 
   testWidgets('prevents repeated submission while saving', (tester) async {
@@ -151,6 +157,10 @@ Future<void> _pumpScreen(
         gradeService: gradeService,
         userService: userService ?? _FakeUserService(),
         authService: _FakeAuthService(),
+        studentHomeScreenBuilder: (gradeId) => StudentHomeScreen(
+          gradeId: gradeId,
+          subjectService: _FakeSubjectService(),
+        ),
       ),
     ),
   );
@@ -205,4 +215,9 @@ class _FakeUserService extends UserService {
 class _FakeAuthService extends AuthService {
   @override
   String? get currentUserUid => 'authenticated-student';
+}
+
+class _FakeSubjectService extends SubjectService {
+  @override
+  Future<List<Never>> loadActiveSubjectsForGrade(String gradeId) async => [];
 }

@@ -1,16 +1,31 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../screens/student/grade_selection_screen.dart';
+import '../../screens/student/student_home_screen.dart';
 import '../../services/auth_service.dart';
+import '../../services/user_service.dart';
 import '../../widgets/app_logo.dart';
 import '../../widgets/app_password_field.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
+typedef GradeSelectionScreenBuilder = Widget Function();
+typedef StudentHomeScreenBuilder = Widget Function(String gradeId);
+
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.authService});
+  const LoginScreen({
+    super.key,
+    this.authService,
+    this.userService,
+    this.gradeSelectionScreenBuilder,
+    this.studentHomeScreenBuilder,
+  });
 
   final AuthService? authService;
+  final UserService? userService;
+  final GradeSelectionScreenBuilder? gradeSelectionScreenBuilder;
+  final StudentHomeScreenBuilder? studentHomeScreenBuilder;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -20,10 +35,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   AuthService? _defaultAuthService;
+  UserService? _defaultUserService;
   bool _isLoading = false;
+  bool _hasNavigated = false;
 
   AuthService get _authService =>
       widget.authService ?? (_defaultAuthService ??= AuthService());
+  UserService get _userService =>
+      widget.userService ?? (_defaultUserService ??= UserService());
 
   @override
   void dispose() {
@@ -46,8 +65,30 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authService.signIn(email: email, password: password);
       if (!mounted) return;
-      _showMessage('تم تسجيل الدخول بنجاح.', isSuccess: true);
+
+      final uid = _authService.currentUserUid;
+      if (uid == null || uid.trim().isEmpty) {
+        _showMessage('تعذر التحقق من جلسة المستخدم. سجل الدخول مرة أخرى.');
+        return;
+      }
+
+      final profile = await _userService.getUserProfile(uid);
+      if (!mounted) return;
+
+      switch (_userService.decidePostLoginRoute(profile)) {
+        case PostLoginRoute.studentNeedsGradeSelection:
+          _replaceLoginWith(_buildGradeSelectionScreen());
+        case PostLoginRoute.studentReady:
+          _replaceLoginWith(_buildStudentHomeScreen(profile.gradeId!));
+        case PostLoginRoute.admin:
+          _showMessage('تم تسجيل الدخول، لكن واجهة الإدارة غير متاحة حالياً.');
+        case PostLoginRoute.invalidRole:
+          _showMessage('تعذر تحديد صلاحية الحساب. تواصل مع إدارة التطبيق.');
+      }
     } on AuthFailure catch (error) {
+      if (!mounted) return;
+      _showMessage(error.message);
+    } on UserProfileFailure catch (error) {
       if (!mounted) return;
       _showMessage(error.message);
     } catch (_) {
@@ -56,6 +97,25 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Widget _buildGradeSelectionScreen() {
+    return widget.gradeSelectionScreenBuilder?.call() ??
+        GradeSelectionScreen(studentHomeScreenBuilder: _buildStudentHomeScreen);
+  }
+
+  Widget _buildStudentHomeScreen(String gradeId) {
+    return widget.studentHomeScreenBuilder?.call(gradeId) ??
+        StudentHomeScreen(gradeId: gradeId);
+  }
+
+  void _replaceLoginWith(Widget destination) {
+    if (!mounted || _hasNavigated) return;
+    _hasNavigated = true;
+    Navigator.of(context).pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(builder: (_) => destination),
+      (_) => false,
+    );
   }
 
   void _showMessage(String message, {bool isSuccess = false}) {

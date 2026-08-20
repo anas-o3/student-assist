@@ -102,23 +102,37 @@ void main() {
     expect(find.text('الجبر'), findsOneWidget);
   });
 
-  testWidgets('chapter tap shows the temporary lesson message', (tester) async {
+  testWidgets('chapter tap opens LessonListScreen with selected chapterId', (
+    tester,
+  ) async {
+    String? openedChapterId;
     await _pumpScreen(
       tester,
       chapterService: _FakeChapterService((_) async => chapters),
+      lessonListScreenBuilder: (chapterId) {
+        openedChapterId = chapterId;
+        return Scaffold(appBar: AppBar(), body: Text('lessons-for-$chapterId'));
+      },
     );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('chapter-card-chapter-algebra')));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('سيتم إضافة الدروس في المرحلة التالية.'), findsOneWidget);
+    expect(openedChapterId, 'chapter-algebra');
+    expect(find.text('lessons-for-chapter-algebra'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('الجبر'), findsOneWidget);
   });
 }
 
 Future<void> _pumpScreen(
   WidgetTester tester, {
   required ChapterService chapterService,
+  LessonListScreenBuilder? lessonListScreenBuilder,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -126,6 +140,7 @@ Future<void> _pumpScreen(
       home: ChapterScreen(
         subjectId: 'subject-math',
         chapterService: chapterService,
+        lessonListScreenBuilder: lessonListScreenBuilder,
       ),
     ),
   );

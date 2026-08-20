@@ -101,6 +101,44 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /lessons/{lessonId} {
+      allow read: if request.auth != null
+                  && resource.data.isActive == true
+                  && resource.data.chapterId is string
+                  && exists(
+                    /databases/$(database)/documents/users/$(request.auth.uid)
+                  )
+                  && exists(
+                    /databases/$(database)/documents/chapters/$(resource.data.chapterId)
+                  )
+                  && get(
+                    /databases/$(database)/documents/chapters/$(resource.data.chapterId)
+                  ).data.isActive == true
+                  && get(
+                    /databases/$(database)/documents/chapters/$(resource.data.chapterId)
+                  ).data.subjectId is string
+                  && exists(
+                    /databases/$(database)/documents/subjects/$(get(
+                      /databases/$(database)/documents/chapters/$(resource.data.chapterId)
+                    ).data.subjectId)
+                  )
+                  && get(
+                    /databases/$(database)/documents/subjects/$(get(
+                      /databases/$(database)/documents/chapters/$(resource.data.chapterId)
+                    ).data.subjectId)
+                  ).data.isActive == true
+                  && get(
+                    /databases/$(database)/documents/subjects/$(get(
+                      /databases/$(database)/documents/chapters/$(resource.data.chapterId)
+                    ).data.subjectId)
+                  ).data.gradeId == get(
+                    /databases/$(database)/documents/users/$(request.auth.uid)
+                  ).data.gradeId;
+
+      // Lesson management by administrators is intentionally deferred.
+      allow create, update, delete: if false;
+    }
+
     // Collections not implemented yet remain closed in Production mode.
     match /{document=**} {
       allow read, write: if false;

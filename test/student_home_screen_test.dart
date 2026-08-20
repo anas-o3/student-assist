@@ -113,28 +113,32 @@ void main() {
     expect(find.text('اللغة العربية'), findsOneWidget);
   });
 
-  testWidgets('subject tap shows only the deferred-content message', (
+  testWidgets('subject tap opens ChapterScreen with the selected subjectId', (
     tester,
   ) async {
+    String? openedSubjectId;
     await _pumpScreen(
       tester,
       subjectService: _FakeSubjectService((_) async => subjects),
+      chapterScreenBuilder: (subjectId) {
+        openedSubjectId = subjectId;
+        return Scaffold(body: Text('chapters-for-$subjectId'));
+      },
     );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('subject-card-subject-arabic')));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(
-      find.text('سيتم إضافة الأبواب والدروس في المرحلة التالية.'),
-      findsOneWidget,
-    );
+    expect(openedSubjectId, 'subject-arabic');
+    expect(find.text('chapters-for-subject-arabic'), findsOneWidget);
   });
 }
 
 Future<void> _pumpScreen(
   WidgetTester tester, {
   required SubjectService subjectService,
+  ChapterScreenBuilder? chapterScreenBuilder,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -142,6 +146,7 @@ Future<void> _pumpScreen(
       home: StudentHomeScreen(
         gradeId: 'grade-1',
         subjectService: subjectService,
+        chapterScreenBuilder: chapterScreenBuilder,
       ),
     ),
   );

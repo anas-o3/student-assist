@@ -78,6 +78,29 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /chapters/{chapterId} {
+      allow read: if request.auth != null
+                  && resource.data.isActive == true
+                  && resource.data.subjectId is string
+                  && exists(
+                    /databases/$(database)/documents/users/$(request.auth.uid)
+                  )
+                  && exists(
+                    /databases/$(database)/documents/subjects/$(resource.data.subjectId)
+                  )
+                  && get(
+                    /databases/$(database)/documents/subjects/$(resource.data.subjectId)
+                  ).data.isActive == true
+                  && get(
+                    /databases/$(database)/documents/subjects/$(resource.data.subjectId)
+                  ).data.gradeId == get(
+                    /databases/$(database)/documents/users/$(request.auth.uid)
+                  ).data.gradeId;
+
+      // Chapter management by administrators is intentionally deferred.
+      allow create, update, delete: if false;
+    }
+
     // Collections not implemented yet remain closed in Production mode.
     match /{document=**} {
       allow read, write: if false;

@@ -4,16 +4,21 @@ import '../../app/theme.dart';
 import '../../models/subject.dart';
 import '../../services/subject_service.dart';
 import '../../widgets/app_logo.dart';
+import 'chapter_screen.dart';
+
+typedef ChapterScreenBuilder = Widget Function(String subjectId);
 
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({
     super.key,
     required this.gradeId,
     this.subjectService,
+    this.chapterScreenBuilder,
   });
 
   final String gradeId;
   final SubjectService? subjectService;
+  final ChapterScreenBuilder? chapterScreenBuilder;
 
   @override
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
@@ -67,16 +72,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     }
   }
 
-  void _showDeferredSubjectMessage() {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('سيتم إضافة الأبواب والدروس في المرحلة التالية.'),
-          backgroundColor: AppTheme.primary,
-        ),
-      );
+  void _openSubject(Subject subject) {
+    final chapterScreen = widget.chapterScreenBuilder?.call(subject.subjectId);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            chapterScreen ?? ChapterScreen(subjectId: subject.subjectId),
+      ),
+    );
   }
 
   @override
@@ -123,7 +126,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     return _SubjectGrid(
       key: const ValueKey('subjects-grid'),
       subjects: _subjects,
-      onSubjectTap: _showDeferredSubjectMessage,
+      onSubjectTap: _openSubject,
     );
   }
 }
@@ -170,7 +173,7 @@ class _SubjectGrid extends StatelessWidget {
   });
 
   final List<Subject> subjects;
-  final VoidCallback onSubjectTap;
+  final ValueChanged<Subject> onSubjectTap;
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +205,7 @@ class _SubjectGrid extends StatelessWidget {
                 return _SubjectCard(
                   key: Key('subject-card-${subject.subjectId}'),
                   subject: subject,
-                  onTap: onSubjectTap,
+                  onTap: () => onSubjectTap(subject),
                 );
               },
             ),

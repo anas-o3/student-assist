@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:student_assist/app/theme.dart';
 import 'package:student_assist/models/lesson.dart';
+import 'package:student_assist/screens/student/lesson_content_screen.dart';
 import 'package:student_assist/screens/student/lesson_list_screen.dart';
 import 'package:student_assist/services/lesson_service.dart';
 
@@ -87,7 +88,9 @@ void main() {
     expect(find.text('المعادلات'), findsOneWidget);
   });
 
-  testWidgets('lesson tap shows the temporary content message', (tester) async {
+  testWidgets('lesson tap opens content with the exact selected lesson', (
+    tester,
+  ) async {
     await _pumpScreen(
       tester,
       lessonService: _FakeLessonService((_) async => lessons),
@@ -95,12 +98,23 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('lesson-card-lesson-equations')));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(
-      find.text('سيتم إضافة محتوى الدرس في المرحلة التالية.'),
-      findsOneWidget,
+    expect(find.byType(LessonContentScreen), findsOneWidget);
+    expect(find.text('المعادلات'), findsOneWidget);
+    expect(find.text('شرح الدرس'), findsOneWidget);
+
+    final contentScreen = tester.widget<LessonContentScreen>(
+      find.byType(LessonContentScreen),
     );
+    expect(contentScreen.lesson.lessonId, 'lesson-equations');
+
+    await tester.tap(find.byKey(const Key('lesson-content-back-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LessonListScreen), findsOneWidget);
+    expect(find.byType(LessonContentScreen), findsNothing);
+    expect(find.text('المعادلات'), findsOneWidget);
   });
 }
 

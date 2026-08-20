@@ -4,6 +4,7 @@ import '../../app/theme.dart';
 import '../../models/lesson.dart';
 import '../../services/lesson_service.dart';
 import '../../widgets/app_logo.dart';
+import 'lesson_content_screen.dart';
 
 class LessonListScreen extends StatefulWidget {
   const LessonListScreen({
@@ -69,17 +70,12 @@ class _LessonListScreenState extends State<LessonListScreen> {
     }
   }
 
-  void _showDeferredContentMessage() {
-    // Temporary until the approved LessonContentScreen is implemented.
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('سيتم إضافة محتوى الدرس في المرحلة التالية.'),
-          backgroundColor: AppTheme.primary,
-        ),
-      );
+  void _openLessonContent(Lesson lesson) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LessonContentScreen(lesson: lesson),
+      ),
+    );
   }
 
   @override
@@ -126,7 +122,7 @@ class _LessonListScreenState extends State<LessonListScreen> {
     return _LessonList(
       key: const ValueKey('lessons-list'),
       lessons: _lessons,
-      onLessonTap: _showDeferredContentMessage,
+      onLessonTap: _openLessonContent,
     );
   }
 }
@@ -182,7 +178,7 @@ class _LessonList extends StatelessWidget {
   });
 
   final List<Lesson> lessons;
-  final VoidCallback onLessonTap;
+  final ValueChanged<Lesson> onLessonTap;
 
   @override
   Widget build(BuildContext context) {
@@ -205,7 +201,7 @@ class _LessonList extends StatelessWidget {
               ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: onLessonTap,
+                onTap: () => onLessonTap(lesson),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 18,

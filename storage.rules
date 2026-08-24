@@ -1,0 +1,54 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /student-content/grades/{gradeId}/subjects/{subjectId}/chapters/{chapterId}/lessons/{lessonId}/resources/{resourceId}/{fileName} {
+      function userCanReadGrade() {
+        let userDocument = firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        );
+
+        return userDocument != null
+               && userDocument.data.gradeId is string
+               && userDocument.data.gradeId == gradeId;
+      }
+
+      function resourceAllowsRead() {
+        let resourceDocument = firestore.get(
+          /databases/(default)/documents/resources/$(resourceId)
+        );
+
+        return resourceDocument != null
+               && resourceDocument.data.resourceId == resourceId
+               && resourceDocument.data.lessonId == lessonId
+               && resourceDocument.data.isActive == true
+               && resourceDocument.data.storagePath == resource.name
+               && (
+                 (
+                   resourceDocument.data.type == 'video'
+                   && resource.contentType is string
+                   && resource.contentType.matches('video/.*')
+                 )
+                 || (
+                   resourceDocument.data.type == 'pdf'
+                   && resource.contentType == 'application/pdf'
+                 )
+               );
+      }
+
+      // Object reads use exactly two Firestore documents: the authenticated
+      // user's profile and the matching Resource metadata document.
+      allow get: if request.auth != null
+                 && userCanReadGrade()
+                 && resourceAllowsRead();
+
+      // Listing and all client writes remain closed. Admin upload support is
+      // intentionally deferred until a trusted upload flow is implemented.
+      allow list, write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -17,8 +17,8 @@ class Resource {
   final String lessonId;
   final String title;
 
-  /// Kept as an opaque persisted value until supported resource types are
-  /// formally approved.
+  /// Persisted as a case-sensitive String. Production UI supports the approved
+  /// lowercase values `video` and `pdf`, while unknown values remain parseable.
   final String type;
 
   /// Persisted exactly as documented. URL and Storage semantics are deferred.

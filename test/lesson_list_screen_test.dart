@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:student_assist/app/theme.dart';
 import 'package:student_assist/models/lesson.dart';
+import 'package:student_assist/models/resource.dart';
 import 'package:student_assist/screens/student/lesson_content_screen.dart';
 import 'package:student_assist/screens/student/lesson_list_screen.dart';
 import 'package:student_assist/services/lesson_service.dart';
+import 'package:student_assist/services/resource_service.dart';
 
 void main() {
   final lessons = [
@@ -128,6 +130,7 @@ Future<void> _pumpScreen(
       home: LessonListScreen(
         chapterId: 'chapter-algebra',
         lessonService: lessonService,
+        resourceService: _FakeResourceService(),
       ),
     ),
   );
@@ -158,5 +161,12 @@ class _FakeLessonService extends LessonService {
   @override
   Future<List<Lesson>> loadActiveLessonsForChapter(String chapterId) {
     return loader(chapterId);
+  }
+}
+
+class _FakeResourceService extends ResourceService {
+  @override
+  Future<List<Resource>> loadActiveResourcesForLesson(String lessonId) async {
+    return const [];
   }
 }

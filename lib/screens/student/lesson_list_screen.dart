@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../models/lesson.dart';
 import '../../services/lesson_service.dart';
+import '../../services/resource_service.dart';
 import '../../widgets/app_logo.dart';
 import 'lesson_content_screen.dart';
 
@@ -11,10 +12,12 @@ class LessonListScreen extends StatefulWidget {
     super.key,
     required this.chapterId,
     this.lessonService,
+    this.resourceService,
   });
 
   final String chapterId;
   final LessonService? lessonService;
+  final ResourceService? resourceService;
 
   @override
   State<LessonListScreen> createState() => _LessonListScreenState();
@@ -73,7 +76,10 @@ class _LessonListScreenState extends State<LessonListScreen> {
   void _openLessonContent(Lesson lesson) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => LessonContentScreen(lesson: lesson),
+        builder: (_) => LessonContentScreen(
+          lesson: lesson,
+          resourceService: widget.resourceService,
+        ),
       ),
     );
   }

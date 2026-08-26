@@ -5,6 +5,7 @@ import '../../models/lesson.dart';
 import '../../models/resource.dart';
 import '../../services/resource_service.dart';
 import '../../widgets/app_logo.dart';
+import 'video_player_screen.dart';
 
 class LessonContentScreen extends StatefulWidget {
   const LessonContentScreen({
@@ -174,21 +175,40 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
     return _ResourceList(
       key: const ValueKey('lesson-resources-list'),
       resources: _resources,
+      onVideoTap: _openVideo,
+    );
+  }
+
+  void _openVideo(Resource resource) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => VideoPlayerScreen(resource: resource),
+      ),
     );
   }
 }
 
 class _ResourceList extends StatelessWidget {
-  const _ResourceList({super.key, required this.resources});
+  const _ResourceList({
+    super.key,
+    required this.resources,
+    required this.onVideoTap,
+  });
 
   final List<Resource> resources;
+  final ValueChanged<Resource> onVideoTap;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         for (var index = 0; index < resources.length; index++) ...[
-          _ResourceCard(resource: resources[index]),
+          _ResourceCard(
+            resource: resources[index],
+            onTap: resources[index].type == 'video'
+                ? () => onVideoTap(resources[index])
+                : null,
+          ),
           if (index != resources.length - 1) const SizedBox(height: 10),
         ],
       ],
@@ -197,65 +217,80 @@ class _ResourceList extends StatelessWidget {
 }
 
 class _ResourceCard extends StatelessWidget {
-  const _ResourceCard({required this.resource});
+  const _ResourceCard({required this.resource, this.onTap});
 
   final Resource resource;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final isVideo = resource.type == 'video';
 
-    return Container(
+    return Material(
       key: Key('resource-card-${resource.resourceId}'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppTheme.card,
+      color: AppTheme.card,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              color: AppTheme.primaryLight,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isVideo
-                  ? Icons.play_circle_outline_rounded
-                  : Icons.picture_as_pdf_outlined,
-              color: AppTheme.primary,
-              size: 25,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  resource.title,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    height: 1.4,
-                  ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: AppTheme.primaryLight,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  isVideo ? 'فيديو' : 'ملخص PDF',
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 14,
-                  ),
+                child: Icon(
+                  isVideo
+                      ? Icons.play_circle_outline_rounded
+                      : Icons.picture_as_pdf_outlined,
+                  color: AppTheme.primary,
+                  size: 25,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      resource.title,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      isVideo ? 'فيديو' : 'ملخص PDF',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isVideo) ...[
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppTheme.textSecondary,
+                  size: 17,
                 ),
               ],
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

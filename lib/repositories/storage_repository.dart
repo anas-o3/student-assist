@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_storage/firebase_storage.dart';
 
 enum StorageRepositoryFailureReason {
@@ -25,12 +27,15 @@ class StorageObjectMetadata {
 
 typedef StorageMetadataLoader =
     Future<StorageObjectMetadata> Function(String storagePath);
+typedef StorageFileWriter =
+    Future<void> Function(String storagePath, File destination);
 
 class StorageRepository {
-  StorageRepository([this._storage, this._metadataLoader]);
+  StorageRepository([this._storage, this._metadataLoader, this._fileWriter]);
 
   final FirebaseStorage? _storage;
   final StorageMetadataLoader? _metadataLoader;
+  final StorageFileWriter? _fileWriter;
 
   FirebaseStorage get _firebaseStorage => _storage ?? FirebaseStorage.instance;
 
@@ -60,6 +65,21 @@ class StorageRepository {
       throw const StorageRepositoryFailure(
         StorageRepositoryFailureReason.invalidMetadata,
       );
+    } on FirebaseException catch (error) {
+      throw StorageRepositoryFailure(_mapFirebaseFailure(error.code));
+    }
+  }
+
+  Future<void> writeObjectToFile(String storagePath, File destination) async {
+    try {
+      final writer = _fileWriter;
+      if (writer != null) {
+        await writer(storagePath, destination);
+      } else {
+        // Authenticated SDK access is intentional. Public download URLs and
+        // persisted download tokens are not part of the approved contract.
+        await _firebaseStorage.ref(storagePath).writeToFile(destination);
+      }
     } on FirebaseException catch (error) {
       throw StorageRepositoryFailure(_mapFirebaseFailure(error.code));
     }

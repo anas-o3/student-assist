@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../repositories/storage_repository.dart';
 
 enum StorageFailureReason {
@@ -31,6 +33,38 @@ class StorageService {
       _storageRepository ?? (_defaultStorageRepository ??= StorageRepository());
 
   Future<StorageObjectMetadata> loadObjectMetadata(String storagePath) async {
+    _validateStoragePath(storagePath);
+
+    try {
+      return await _storage.loadObjectMetadata(storagePath);
+    } on StorageRepositoryFailure catch (error) {
+      throw _mapRepositoryFailure(error);
+    }
+  }
+
+  Future<StorageObjectMetadata> downloadVideoToFile(
+    String storagePath,
+    File destination,
+  ) async {
+    _validateStoragePath(storagePath);
+
+    try {
+      final metadata = await _storage.loadObjectMetadata(storagePath);
+      if (metadata.contentType?.startsWith('video/') != true) {
+        throw const StorageFailure(
+          'ملف الفيديو غير صالح.',
+          StorageFailureReason.invalidMetadata,
+        );
+      }
+
+      await _storage.writeObjectToFile(storagePath, destination);
+      return metadata;
+    } on StorageRepositoryFailure catch (error) {
+      throw _mapRepositoryFailure(error);
+    }
+  }
+
+  void _validateStoragePath(String storagePath) {
     if (storagePath.trim().isEmpty) {
       throw const StorageFailure(
         'تعذر تحديد ملف المورد.',
@@ -45,28 +79,26 @@ class StorageService {
         StorageFailureReason.invalidStoragePath,
       );
     }
+  }
 
-    try {
-      return await _storage.loadObjectMetadata(storagePath);
-    } on StorageRepositoryFailure catch (error) {
-      throw switch (error.reason) {
-        StorageRepositoryFailureReason.invalidMetadata => const StorageFailure(
-          'بيانات ملف المورد غير صالحة.',
-          StorageFailureReason.invalidMetadata,
-        ),
-        StorageRepositoryFailureReason.notFound => const StorageFailure(
-          'ملف المورد غير متوفر.',
-          StorageFailureReason.notFound,
-        ),
-        StorageRepositoryFailureReason.unauthorized => const StorageFailure(
-          'غير مسموح بالوصول إلى ملف المورد.',
-          StorageFailureReason.unauthorized,
-        ),
-        StorageRepositoryFailureReason.backend => const StorageFailure(
-          'تعذر الوصول إلى ملف المورد. حاول مرة أخرى.',
-          StorageFailureReason.backend,
-        ),
-      };
-    }
+  StorageFailure _mapRepositoryFailure(StorageRepositoryFailure error) {
+    return switch (error.reason) {
+      StorageRepositoryFailureReason.invalidMetadata => const StorageFailure(
+        'بيانات ملف المورد غير صالحة.',
+        StorageFailureReason.invalidMetadata,
+      ),
+      StorageRepositoryFailureReason.notFound => const StorageFailure(
+        'ملف المورد غير متوفر.',
+        StorageFailureReason.notFound,
+      ),
+      StorageRepositoryFailureReason.unauthorized => const StorageFailure(
+        'غير مسموح بالوصول إلى ملف المورد.',
+        StorageFailureReason.unauthorized,
+      ),
+      StorageRepositoryFailureReason.backend => const StorageFailure(
+        'تعذر الوصول إلى ملف المورد. حاول مرة أخرى.',
+        StorageFailureReason.backend,
+      ),
+    };
   }
 }

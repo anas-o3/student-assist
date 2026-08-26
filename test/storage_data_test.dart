@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:student_assist/repositories/storage_repository.dart';
@@ -92,6 +94,27 @@ void main() {
         ),
       );
     });
+
+    test(
+      'writes an object through the injected authenticated boundary',
+      () async {
+        String? receivedPath;
+        File? receivedDestination;
+        final repository = StorageRepository(null, null, (
+          storagePath,
+          destination,
+        ) async {
+          receivedPath = storagePath;
+          receivedDestination = destination;
+        });
+        final destination = File('temporary-video.mp4');
+
+        await repository.writeObjectToFile(_approvedPath, destination);
+
+        expect(receivedPath, _approvedPath);
+        expect(receivedDestination, same(destination));
+      },
+    );
   });
 
   group('StorageService', () {
@@ -196,6 +219,51 @@ void main() {
               ),
         ),
       );
+    });
+
+    test('downloads only metadata-confirmed video content', () async {
+      var writes = 0;
+      final repository = StorageRepository(
+        null,
+        (storagePath) async => StorageObjectMetadata(
+          fullPath: storagePath,
+          contentType: 'video/mp4',
+        ),
+        (_, _) async => writes++,
+      );
+
+      final metadata = await StorageService(
+        repository,
+      ).downloadVideoToFile(_approvedPath, File('temporary-video.mp4'));
+
+      expect(metadata.contentType, 'video/mp4');
+      expect(writes, 1);
+    });
+
+    test('rejects a non-video object before downloading it', () async {
+      var writes = 0;
+      final repository = StorageRepository(
+        null,
+        (storagePath) async => StorageObjectMetadata(
+          fullPath: storagePath,
+          contentType: 'application/pdf',
+        ),
+        (_, _) async => writes++,
+      );
+
+      await expectLater(
+        StorageService(
+          repository,
+        ).downloadVideoToFile(_approvedPath, File('temporary-video.mp4')),
+        throwsA(
+          isA<StorageFailure>().having(
+            (error) => error.reason,
+            'reason',
+            StorageFailureReason.invalidMetadata,
+          ),
+        ),
+      );
+      expect(writes, 0);
     });
   });
 }

@@ -6,6 +6,7 @@ import 'package:student_assist/app/theme.dart';
 import 'package:student_assist/models/lesson.dart';
 import 'package:student_assist/models/resource.dart';
 import 'package:student_assist/screens/student/lesson_content_screen.dart';
+import 'package:student_assist/screens/student/video_player_screen.dart';
 import 'package:student_assist/services/resource_service.dart';
 
 void main() {
@@ -74,6 +75,54 @@ void main() {
     expect(find.text('ملخص الدرس'), findsOneWidget);
     expect(find.text('ملخص PDF'), findsOneWidget);
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
+  });
+
+  testWidgets('video card opens VideoPlayerScreen with the selected Resource', (
+    tester,
+  ) async {
+    final video = _resource(
+      resourceId: 'video-1',
+      title: 'شرح مرئي',
+      type: 'video',
+      order: 1,
+    );
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService((_) async => [video]),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('resource-card-video-1')));
+    await tester.pumpAndSettle();
+
+    final screen = tester.widget<VideoPlayerScreen>(
+      find.byType(VideoPlayerScreen),
+    );
+    expect(screen.resource, same(video));
+    expect(find.text('ملف الفيديو غير متوفر.'), findsOneWidget);
+  });
+
+  testWidgets('PDF card remains non-interactive', (tester) async {
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'pdf-1',
+            title: 'ملخص الدرس',
+            type: 'pdf',
+            order: 1,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('resource-card-pdf-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(VideoPlayerScreen), findsNothing);
+    expect(find.byType(LessonContentScreen), findsOneWidget);
   });
 
   testWidgets('displays supported resources by global order', (tester) async {

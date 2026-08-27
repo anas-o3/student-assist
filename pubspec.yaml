@@ -45,6 +45,7 @@ dependencies:
   cloud_firestore: ^6.8.0
   firebase_storage: ^13.4.6
   video_player: ^2.14.0
+  flutter_pdfview: ^1.4.5
 
 dev_dependencies:
   flutter_test:

@@ -6,6 +6,7 @@ import 'package:student_assist/app/theme.dart';
 import 'package:student_assist/models/lesson.dart';
 import 'package:student_assist/models/resource.dart';
 import 'package:student_assist/screens/student/lesson_content_screen.dart';
+import 'package:student_assist/screens/student/pdf_viewer_screen.dart';
 import 'package:student_assist/screens/student/video_player_screen.dart';
 import 'package:student_assist/services/resource_service.dart';
 
@@ -102,27 +103,27 @@ void main() {
     expect(find.text('ملف الفيديو غير متوفر.'), findsOneWidget);
   });
 
-  testWidgets('PDF card remains non-interactive', (tester) async {
+  testWidgets('PDF card opens PdfViewerScreen with the selected Resource', (
+    tester,
+  ) async {
+    final pdf = _resource(
+      resourceId: 'pdf-1',
+      title: 'ملخص الدرس',
+      type: 'pdf',
+      order: 1,
+    );
     await _pumpScreen(
       tester,
-      resourceService: _FakeResourceService(
-        (_) async => [
-          _resource(
-            resourceId: 'pdf-1',
-            title: 'ملخص الدرس',
-            type: 'pdf',
-            order: 1,
-          ),
-        ],
-      ),
+      resourceService: _FakeResourceService((_) async => [pdf]),
     );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('resource-card-pdf-1')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(VideoPlayerScreen), findsNothing);
-    expect(find.byType(LessonContentScreen), findsOneWidget);
+    final screen = tester.widget<PdfViewerScreen>(find.byType(PdfViewerScreen));
+    expect(screen.resource, same(pdf));
+    expect(find.text('ملف PDF غير متوفر.'), findsOneWidget);
   });
 
   testWidgets('displays supported resources by global order', (tester) async {

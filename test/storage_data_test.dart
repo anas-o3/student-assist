@@ -9,6 +9,10 @@ const _approvedPath =
     'student-content/grades/grade-1/subjects/subject-math-g1/'
     'chapters/chapter-math-g1-1/lessons/lesson-math-g1-ch1-1/'
     'resources/resource-video-1/lesson-video.mp4';
+const _approvedPdfPath =
+    'student-content/grades/grade-1/subjects/subject-math-g1/'
+    'chapters/chapter-math-g1-1/lessons/lesson-math-g1-ch1-1/'
+    'resources/resource-pdf-1/lesson-summary.pdf';
 
 void main() {
   group('StorageRepository', () {
@@ -255,6 +259,51 @@ void main() {
         StorageService(
           repository,
         ).downloadVideoToFile(_approvedPath, File('temporary-video.mp4')),
+        throwsA(
+          isA<StorageFailure>().having(
+            (error) => error.reason,
+            'reason',
+            StorageFailureReason.invalidMetadata,
+          ),
+        ),
+      );
+      expect(writes, 0);
+    });
+
+    test('downloads only metadata-confirmed PDF content', () async {
+      var writes = 0;
+      final repository = StorageRepository(
+        null,
+        (storagePath) async => StorageObjectMetadata(
+          fullPath: storagePath,
+          contentType: 'application/pdf',
+        ),
+        (_, _) async => writes++,
+      );
+
+      final metadata = await StorageService(
+        repository,
+      ).downloadPdfToFile(_approvedPdfPath, File('temporary-document.pdf'));
+
+      expect(metadata.contentType, 'application/pdf');
+      expect(writes, 1);
+    });
+
+    test('rejects a non-PDF object before downloading it', () async {
+      var writes = 0;
+      final repository = StorageRepository(
+        null,
+        (storagePath) async => StorageObjectMetadata(
+          fullPath: storagePath,
+          contentType: 'video/mp4',
+        ),
+        (_, _) async => writes++,
+      );
+
+      await expectLater(
+        StorageService(
+          repository,
+        ).downloadPdfToFile(_approvedPdfPath, File('temporary-document.pdf')),
         throwsA(
           isA<StorageFailure>().having(
             (error) => error.reason,

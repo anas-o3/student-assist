@@ -5,6 +5,7 @@ import '../../models/lesson.dart';
 import '../../models/resource.dart';
 import '../../services/resource_service.dart';
 import '../../widgets/app_logo.dart';
+import 'pdf_viewer_screen.dart';
 import 'video_player_screen.dart';
 
 class LessonContentScreen extends StatefulWidget {
@@ -176,6 +177,7 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
       key: const ValueKey('lesson-resources-list'),
       resources: _resources,
       onVideoTap: _openVideo,
+      onPdfTap: _openPdf,
     );
   }
 
@@ -186,6 +188,14 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
       ),
     );
   }
+
+  void _openPdf(Resource resource) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PdfViewerScreen(resource: resource),
+      ),
+    );
+  }
 }
 
 class _ResourceList extends StatelessWidget {
@@ -193,10 +203,12 @@ class _ResourceList extends StatelessWidget {
     super.key,
     required this.resources,
     required this.onVideoTap,
+    required this.onPdfTap,
   });
 
   final List<Resource> resources;
   final ValueChanged<Resource> onVideoTap;
+  final ValueChanged<Resource> onPdfTap;
 
   @override
   Widget build(BuildContext context) {
@@ -205,9 +217,11 @@ class _ResourceList extends StatelessWidget {
         for (var index = 0; index < resources.length; index++) ...[
           _ResourceCard(
             resource: resources[index],
-            onTap: resources[index].type == 'video'
-                ? () => onVideoTap(resources[index])
-                : null,
+            onTap: switch (resources[index].type) {
+              'video' => () => onVideoTap(resources[index]),
+              'pdf' => () => onPdfTap(resources[index]),
+              _ => null,
+            },
           ),
           if (index != resources.length - 1) const SizedBox(height: 10),
         ],
@@ -280,7 +294,7 @@ class _ResourceCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (isVideo) ...[
+              if (onTap != null) ...[
                 const SizedBox(width: 8),
                 const Icon(
                   Icons.arrow_back_ios_new_rounded,

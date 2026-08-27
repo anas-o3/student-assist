@@ -64,6 +64,28 @@ class StorageService {
     }
   }
 
+  Future<StorageObjectMetadata> downloadPdfToFile(
+    String storagePath,
+    File destination,
+  ) async {
+    _validateStoragePath(storagePath);
+
+    try {
+      final metadata = await _storage.loadObjectMetadata(storagePath);
+      if (metadata.contentType != 'application/pdf') {
+        throw const StorageFailure(
+          'ملف PDF غير صالح.',
+          StorageFailureReason.invalidMetadata,
+        );
+      }
+
+      await _storage.writeObjectToFile(storagePath, destination);
+      return metadata;
+    } on StorageRepositoryFailure catch (error) {
+      throw _mapRepositoryFailure(error);
+    }
+  }
+
   void _validateStoragePath(String storagePath) {
     if (storagePath.trim().isEmpty) {
       throw const StorageFailure(

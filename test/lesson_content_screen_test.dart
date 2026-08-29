@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,7 @@ import 'package:student_assist/models/resource.dart';
 import 'package:student_assist/screens/student/lesson_content_screen.dart';
 import 'package:student_assist/screens/student/pdf_viewer_screen.dart';
 import 'package:student_assist/screens/student/video_player_screen.dart';
+import 'package:student_assist/services/pdf_download_service.dart';
 import 'package:student_assist/services/resource_service.dart';
 
 void main() {
@@ -76,6 +78,27 @@ void main() {
     expect(find.text('ملخص الدرس'), findsOneWidget);
     expect(find.text('ملخص PDF'), findsOneWidget);
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
+    expect(find.byKey(const Key('download-pdf-pdf-1')), findsOneWidget);
+  });
+
+  testWidgets('video resources have no PDF download action', (tester) async {
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'video-1',
+            title: 'شرح مرئي',
+            type: 'video',
+            order: 1,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('download-pdf-video-1')), findsNothing);
+    expect(find.byIcon(Icons.download_rounded), findsNothing);
   });
 
   testWidgets('video card opens VideoPlayerScreen with the selected Resource', (
@@ -124,6 +147,175 @@ void main() {
     final screen = tester.widget<PdfViewerScreen>(find.byType(PdfViewerScreen));
     expect(screen.resource, same(pdf));
     expect(find.text('ملف PDF غير متوفر.'), findsOneWidget);
+  });
+
+  testWidgets('downloads a PDF separately and shows success', (tester) async {
+    final pdf = _resource(
+      resourceId: 'pdf-1',
+      title: 'ملخص الدرس',
+      type: 'pdf',
+      order: 1,
+    );
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_pdf_ui_test_',
+    );
+    final file = File('${folder.path}/document.pdf')
+      ..writeAsBytesSync('%PDF-'.codeUnits);
+    var calls = 0;
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService((_) async => [pdf]),
+      pdfDownloadService: _FakePdfDownloadService((_) async {
+        calls++;
+        return PdfDownloadResult(file: file, wasAlreadyDownloaded: false);
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('download-pdf-pdf-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(calls, 1);
+    expect(find.text('تم تنزيل الملف بنجاح.'), findsOneWidget);
+    expect(find.byIcon(Icons.download_done_rounded), findsOneWidget);
+    expect(find.byType(PdfViewerScreen), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+    folder.deleteSync(recursive: true);
+  });
+
+  testWidgets('prevents repeated PDF submission while downloading', (
+    tester,
+  ) async {
+    final completer = Completer<PdfDownloadResult>();
+    var calls = 0;
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'pdf-1',
+            title: 'ملخص الدرس',
+            type: 'pdf',
+            order: 1,
+          ),
+        ],
+      ),
+      pdfDownloadService: _FakePdfDownloadService((_) {
+        calls++;
+        return completer.future;
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.byKey(const Key('download-pdf-pdf-1'));
+    await tester.tap(button);
+    await tester.pump();
+    await tester.tap(button, warnIfMissed: false);
+    await tester.pump();
+
+    expect(calls, 1);
+    expect(find.byKey(const Key('pdf-download-progress')), findsOneWidget);
+
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_pdf_pending_test_',
+    );
+    final file = File('${folder.path}/document.pdf')
+      ..writeAsBytesSync('%PDF-'.codeUnits);
+    completer.complete(
+      PdfDownloadResult(file: file, wasAlreadyDownloaded: false),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(seconds: 5));
+    folder.deleteSync(recursive: true);
+  });
+
+  testWidgets('completion after disposal does not update the old screen', (
+    tester,
+  ) async {
+    final completer = Completer<PdfDownloadResult>();
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'pdf-1',
+            title: 'ملخص الدرس',
+            type: 'pdf',
+            order: 1,
+          ),
+        ],
+      ),
+      pdfDownloadService: _FakePdfDownloadService((_) => completer.future),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('download-pdf-pdf-1')));
+    await tester.pump();
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_pdf_disposed_test_',
+    );
+    final file = File('${folder.path}/document.pdf')
+      ..writeAsBytesSync('%PDF-'.codeUnits);
+    completer.complete(
+      PdfDownloadResult(file: file, wasAlreadyDownloaded: false),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    folder.deleteSync(recursive: true);
+  });
+
+  testWidgets('shows a safe PDF download error and allows retry', (
+    tester,
+  ) async {
+    var attempts = 0;
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_pdf_retry_test_',
+    );
+    final file = File('${folder.path}/document.pdf')
+      ..writeAsBytesSync('%PDF-'.codeUnits);
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'pdf-1',
+            title: 'ملخص الدرس',
+            type: 'pdf',
+            order: 1,
+          ),
+        ],
+      ),
+      pdfDownloadService: _FakePdfDownloadService((_) async {
+        attempts++;
+        if (attempts == 1) {
+          throw const PdfDownloadFailure(
+            'تعذر تنزيل ملف PDF. حاول مرة أخرى.',
+            PdfDownloadFailureReason.backend,
+          );
+        }
+        return PdfDownloadResult(file: file, wasAlreadyDownloaded: false);
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.byKey(const Key('download-pdf-pdf-1'));
+    await tester.tap(button);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('تعذر تنزيل ملف PDF. حاول مرة أخرى.'), findsOneWidget);
+    expect(find.textContaining('Firebase'), findsNothing);
+
+    await tester.tap(button);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(attempts, 2);
+    expect(find.text('تم تنزيل الملف بنجاح.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    folder.deleteSync(recursive: true);
   });
 
   testWidgets('displays supported resources by global order', (tester) async {
@@ -346,6 +538,7 @@ Future<void> _pumpScreen(
   WidgetTester tester, {
   Lesson? lesson,
   required ResourceService resourceService,
+  PdfDownloadService? pdfDownloadService,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -353,6 +546,14 @@ Future<void> _pumpScreen(
       home: LessonContentScreen(
         lesson: lesson ?? _lesson(),
         resourceService: resourceService,
+        pdfDownloadService:
+            pdfDownloadService ??
+            _FakePdfDownloadService(
+              (_) async => throw const PdfDownloadFailure(
+                'تعذر تنزيل ملف PDF. حاول مرة أخرى.',
+                PdfDownloadFailureReason.backend,
+              ),
+            ),
       ),
     ),
   );
@@ -402,4 +603,17 @@ class _FakeResourceService extends ResourceService {
   Future<List<Resource>> loadActiveResourcesForLesson(String lessonId) {
     return loader(lessonId);
   }
+}
+
+class _FakePdfDownloadService extends PdfDownloadService {
+  _FakePdfDownloadService(this.downloader);
+
+  final Future<PdfDownloadResult> Function(Resource resource) downloader;
+
+  @override
+  Future<PdfDownloadResult> downloadPdf(Resource resource) =>
+      downloader(resource);
+
+  @override
+  Future<File?> findDownloadedPdf(Resource resource) async => null;
 }

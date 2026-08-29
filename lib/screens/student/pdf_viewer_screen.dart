@@ -6,6 +6,7 @@ import 'package:flutter_pdfview/flutter_pdfview.dart';
 
 import '../../app/theme.dart';
 import '../../models/resource.dart';
+import '../../services/pdf_download_service.dart';
 import '../../services/pdf_service.dart';
 
 typedef PdfDocumentViewerBuilder =
@@ -21,11 +22,13 @@ class PdfViewerScreen extends StatefulWidget {
     super.key,
     required this.resource,
     this.pdfService,
+    this.pdfDownloadService,
     this.viewerBuilder,
   });
 
   final Resource resource;
   final PdfService? pdfService;
+  final PdfDownloadService? pdfDownloadService;
   final PdfDocumentViewerBuilder? viewerBuilder;
 
   @override
@@ -34,6 +37,7 @@ class PdfViewerScreen extends StatefulWidget {
 
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   PdfService? _defaultPdfService;
+  PdfDownloadService? _defaultPdfDownloadService;
   PdfViewSource? _source;
   String? _errorMessage;
   bool _isLoading = true;
@@ -41,6 +45,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   PdfService get _pdfService =>
       widget.pdfService ?? (_defaultPdfService ??= PdfService());
+  PdfDownloadService get _pdfDownloadService =>
+      widget.pdfDownloadService ??
+      (_defaultPdfDownloadService ??= PdfDownloadService());
 
   @override
   void initState() {
@@ -60,7 +67,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     await _releaseSource();
 
     try {
-      final source = await _pdfService.preparePdf(widget.resource);
+      final source = await _preparePreferredSource();
       if (!mounted) {
         await source.dispose();
         return;
@@ -84,6 +91,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         _errorMessage = 'تعذر عرض ملف PDF. حاول مرة أخرى.';
       });
     }
+  }
+
+  Future<PdfViewSource> _preparePreferredSource() async {
+    try {
+      final persistentFile = await _pdfDownloadService.findDownloadedPdf(
+        widget.resource,
+      );
+      if (persistentFile != null) {
+        return PdfViewSource.persistent(persistentFile);
+      }
+    } on PdfDownloadFailure {
+      // A local lookup problem must not break the existing authenticated
+      // temporary-viewing path.
+    }
+
+    return _pdfService.preparePdf(widget.resource);
   }
 
   void _onViewerLoaded() {

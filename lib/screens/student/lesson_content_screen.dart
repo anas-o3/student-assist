@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../models/lesson.dart';
 import '../../models/resource.dart';
+import '../../services/pdf_download_service.dart';
 import '../../services/resource_service.dart';
 import '../../widgets/app_logo.dart';
 import 'pdf_viewer_screen.dart';
@@ -13,10 +14,12 @@ class LessonContentScreen extends StatefulWidget {
     super.key,
     required this.lesson,
     this.resourceService,
+    this.pdfDownloadService,
   });
 
   final Lesson lesson;
   final ResourceService? resourceService;
+  final PdfDownloadService? pdfDownloadService;
 
   @override
   State<LessonContentScreen> createState() => _LessonContentScreenState();
@@ -24,12 +27,17 @@ class LessonContentScreen extends StatefulWidget {
 
 class _LessonContentScreenState extends State<LessonContentScreen> {
   ResourceService? _defaultResourceService;
+  PdfDownloadService? _defaultPdfDownloadService;
   List<Resource> _resources = const [];
+  final Map<String, _PdfDownloadState> _pdfDownloadStates = {};
   String? _loadError;
   bool _isLoading = true;
 
   ResourceService get _resourceService =>
       widget.resourceService ?? (_defaultResourceService ??= ResourceService());
+  PdfDownloadService get _pdfDownloadService =>
+      widget.pdfDownloadService ??
+      (_defaultPdfDownloadService ??= PdfDownloadService());
 
   @override
   void initState() {
@@ -178,6 +186,8 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
       resources: _resources,
       onVideoTap: _openVideo,
       onPdfTap: _openPdf,
+      onPdfDownload: _downloadPdf,
+      pdfDownloadStates: _pdfDownloadStates,
     );
   }
 
@@ -192,11 +202,67 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
   void _openPdf(Resource resource) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => PdfViewerScreen(resource: resource),
+        builder: (_) => PdfViewerScreen(
+          resource: resource,
+          pdfDownloadService: _pdfDownloadService,
+        ),
       ),
     );
   }
+
+  Future<void> _downloadPdf(Resource resource) async {
+    if (_pdfDownloadStates[resource.resourceId] ==
+        _PdfDownloadState.downloading) {
+      return;
+    }
+
+    setState(() {
+      _pdfDownloadStates[resource.resourceId] = _PdfDownloadState.downloading;
+    });
+
+    try {
+      final result = await _pdfDownloadService.downloadPdf(resource);
+      if (!mounted) return;
+      setState(() {
+        _pdfDownloadStates[resource.resourceId] = _PdfDownloadState.downloaded;
+      });
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.removeCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.wasAlreadyDownloaded
+                ? 'الملف محفوظ مسبقًا على الجهاز.'
+                : 'تم تنزيل الملف بنجاح.',
+          ),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+    } on PdfDownloadFailure catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _pdfDownloadStates[resource.resourceId] = _PdfDownloadState.failed;
+      });
+      _showDownloadError(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pdfDownloadStates[resource.resourceId] = _PdfDownloadState.failed;
+      });
+      _showDownloadError('تعذر تنزيل ملف PDF. حاول مرة أخرى.');
+    }
+  }
+
+  void _showDownloadError(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AppTheme.error),
+    );
+  }
 }
+
+enum _PdfDownloadState { downloading, downloaded, failed }
 
 class _ResourceList extends StatelessWidget {
   const _ResourceList({
@@ -204,11 +270,15 @@ class _ResourceList extends StatelessWidget {
     required this.resources,
     required this.onVideoTap,
     required this.onPdfTap,
+    required this.onPdfDownload,
+    required this.pdfDownloadStates,
   });
 
   final List<Resource> resources;
   final ValueChanged<Resource> onVideoTap;
   final ValueChanged<Resource> onPdfTap;
+  final ValueChanged<Resource> onPdfDownload;
+  final Map<String, _PdfDownloadState> pdfDownloadStates;
 
   @override
   Widget build(BuildContext context) {
@@ -222,6 +292,10 @@ class _ResourceList extends StatelessWidget {
               'pdf' => () => onPdfTap(resources[index]),
               _ => null,
             },
+            onDownload: resources[index].type == 'pdf'
+                ? () => onPdfDownload(resources[index])
+                : null,
+            downloadState: pdfDownloadStates[resources[index].resourceId],
           ),
           if (index != resources.length - 1) const SizedBox(height: 10),
         ],
@@ -231,10 +305,17 @@ class _ResourceList extends StatelessWidget {
 }
 
 class _ResourceCard extends StatelessWidget {
-  const _ResourceCard({required this.resource, this.onTap});
+  const _ResourceCard({
+    required this.resource,
+    this.onTap,
+    this.onDownload,
+    this.downloadState,
+  });
 
   final Resource resource;
   final VoidCallback? onTap;
+  final VoidCallback? onDownload;
+  final _PdfDownloadState? downloadState;
 
   @override
   Widget build(BuildContext context) {
@@ -294,6 +375,14 @@ class _ResourceCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (!isVideo && onDownload != null) ...[
+                const SizedBox(width: 8),
+                _PdfDownloadButton(
+                  resourceId: resource.resourceId,
+                  state: downloadState,
+                  onPressed: onDownload!,
+                ),
+              ],
               if (onTap != null) ...[
                 const SizedBox(width: 8),
                 const Icon(
@@ -305,6 +394,47 @@ class _ResourceCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PdfDownloadButton extends StatelessWidget {
+  const _PdfDownloadButton({
+    required this.resourceId,
+    required this.state,
+    required this.onPressed,
+  });
+
+  final String resourceId;
+  final _PdfDownloadState? state;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDownloading = state == _PdfDownloadState.downloading;
+    final isDownloaded = state == _PdfDownloadState.downloaded;
+
+    return Semantics(
+      button: true,
+      label: isDownloaded ? 'تم التنزيل' : 'تنزيل ملف PDF',
+      child: IconButton(
+        key: Key('download-pdf-$resourceId'),
+        tooltip: isDownloaded ? 'تم التنزيل' : 'تنزيل',
+        onPressed: isDownloading ? null : onPressed,
+        color: isDownloaded ? AppTheme.success : AppTheme.primary,
+        icon: isDownloading
+            ? const SizedBox(
+                key: Key('pdf-download-progress'),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.2),
+              )
+            : Icon(
+                isDownloaded
+                    ? Icons.download_done_rounded
+                    : Icons.download_rounded,
+              ),
       ),
     );
   }

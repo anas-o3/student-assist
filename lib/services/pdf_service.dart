@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../models/resource.dart';
+import '../utils/pdf_file_validator.dart';
 import 'storage_service.dart';
 
 typedef TemporaryPdfFolderFactory = Future<Directory> Function();
@@ -25,13 +26,17 @@ class PdfFailure implements Exception {
 class PdfViewSource {
   PdfViewSource(this.file, this._temporaryFolder);
 
+  PdfViewSource.persistent(this.file) : _temporaryFolder = null;
+
   final File file;
-  final Directory _temporaryFolder;
+  final Directory? _temporaryFolder;
 
   Future<void> dispose() async {
+    final temporaryFolder = _temporaryFolder;
+    if (temporaryFolder == null) return;
     try {
-      if (await _temporaryFolder.exists()) {
-        await _temporaryFolder.delete(recursive: true);
+      if (await temporaryFolder.exists()) {
+        await temporaryFolder.delete(recursive: true);
       }
     } on FileSystemException {
       // Temporary cleanup is best-effort and never exposes file-system details.
@@ -40,10 +45,15 @@ class PdfViewSource {
 }
 
 class PdfService {
-  PdfService([this._storageService, this._temporaryFolderFactory]);
+  PdfService([
+    this._storageService,
+    this._temporaryFolderFactory,
+    this._validator = const PdfFileValidator(),
+  ]);
 
   final StorageService? _storageService;
   final TemporaryPdfFolderFactory? _temporaryFolderFactory;
+  final PdfFileValidator _validator;
   StorageService? _defaultStorageService;
 
   StorageService get _storage =>
@@ -72,7 +82,7 @@ class PdfService {
       final destination = File('${temporaryFolder.path}/lesson_resource.pdf');
       await _storage.downloadPdfToFile(resource.storagePath, destination);
 
-      if (!await _hasPdfHeader(destination)) {
+      if (!await _validator.isValid(destination)) {
         throw const PdfFailure(
           'ملف PDF غير صالح.',
           PdfFailureReason.invalidPdf,
@@ -92,32 +102,6 @@ class PdfService {
         'تعذر تجهيز ملف PDF. حاول مرة أخرى.',
         PdfFailureReason.backend,
       );
-    }
-  }
-
-  Future<bool> _hasPdfHeader(File file) async {
-    try {
-      if (!await file.exists()) return false;
-      final handle = await file.open();
-      try {
-        final bytes = await handle.read(1024);
-        const signature = [0x25, 0x50, 0x44, 0x46, 0x2D];
-        for (var index = 0; index <= bytes.length - signature.length; index++) {
-          var matches = true;
-          for (var offset = 0; offset < signature.length; offset++) {
-            if (bytes[index + offset] != signature[offset]) {
-              matches = false;
-              break;
-            }
-          }
-          if (matches) return true;
-        }
-        return false;
-      } finally {
-        await handle.close();
-      }
-    } on FileSystemException {
-      return false;
     }
   }
 

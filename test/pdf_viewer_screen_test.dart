@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:student_assist/app/theme.dart';
 import 'package:student_assist/models/resource.dart';
 import 'package:student_assist/screens/student/pdf_viewer_screen.dart';
+import 'package:student_assist/services/pdf_download_service.dart';
 import 'package:student_assist/services/pdf_service.dart';
 
 void main() {
@@ -130,6 +131,9 @@ void main() {
                   builder: (_) => PdfViewerScreen(
                     resource: _resource(),
                     pdfService: _FakePdfService((_) async => source),
+                    pdfDownloadService: _FakePdfDownloadService(
+                      findDownloaded: (_) async => null,
+                    ),
                     viewerBuilder: _successfulViewer,
                   ),
                 ),
@@ -175,6 +179,63 @@ void main() {
     expect(source.file.parent.existsSync(), isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('opens a valid persistent PDF without an online download', (
+    tester,
+  ) async {
+    final persistentFolder = Directory.systemTemp.createTempSync(
+      'student_assist_persistent_pdf_test_',
+    );
+    final persistentFile = File('${persistentFolder.path}/document.pdf')
+      ..writeAsBytesSync('%PDF-1.7\n'.codeUnits);
+    var onlineCalls = 0;
+
+    await _pumpScreen(
+      tester,
+      pdfService: _FakePdfService((_) async {
+        onlineCalls++;
+        return _source();
+      }),
+      pdfDownloadService: _FakePdfDownloadService(
+        findDownloaded: (_) async => persistentFile,
+      ),
+      viewerBuilder: _successfulViewer,
+    );
+    await _pumpFrames(tester);
+
+    expect(find.byKey(const ValueKey('pdf-ready')), findsOneWidget);
+    expect(onlineCalls, 0);
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await _pumpFrames(tester);
+    expect(persistentFile.existsSync(), isTrue);
+    persistentFolder.deleteSync(recursive: true);
+  });
+
+  testWidgets('keeps existing online viewing when no download exists', (
+    tester,
+  ) async {
+    final source = _source();
+    var onlineCalls = 0;
+    await _pumpScreen(
+      tester,
+      pdfService: _FakePdfService((_) async {
+        onlineCalls++;
+        return source;
+      }),
+      pdfDownloadService: _FakePdfDownloadService(
+        findDownloaded: (_) async => null,
+      ),
+      viewerBuilder: _successfulViewer,
+    );
+    await _pumpFrames(tester);
+
+    expect(onlineCalls, 1);
+    expect(find.byKey(const ValueKey('pdf-ready')), findsOneWidget);
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    await _pumpFrames(tester);
+  });
 }
 
 Future<void> _pumpFrames(WidgetTester tester) async {
@@ -216,6 +277,7 @@ class _FakePdfViewerState extends State<_FakePdfViewer> {
 Future<void> _pumpScreen(
   WidgetTester tester, {
   required PdfService pdfService,
+  PdfDownloadService? pdfDownloadService,
   PdfDocumentViewerBuilder? viewerBuilder,
 }) async {
   await tester.pumpWidget(
@@ -224,6 +286,9 @@ Future<void> _pumpScreen(
       home: PdfViewerScreen(
         resource: _resource(),
         pdfService: pdfService,
+        pdfDownloadService:
+            pdfDownloadService ??
+            _FakePdfDownloadService(findDownloaded: (_) async => null),
         viewerBuilder: viewerBuilder,
       ),
     ),
@@ -273,4 +338,14 @@ class _FakePdfService extends PdfService {
 
   @override
   Future<PdfViewSource> preparePdf(Resource resource) => loader(resource);
+}
+
+class _FakePdfDownloadService extends PdfDownloadService {
+  _FakePdfDownloadService({required this.findDownloaded});
+
+  final Future<File?> Function(Resource resource) findDownloaded;
+
+  @override
+  Future<File?> findDownloadedPdf(Resource resource) =>
+      findDownloaded(resource);
 }

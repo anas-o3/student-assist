@@ -33,7 +33,7 @@ class StorageService {
       _storageRepository ?? (_defaultStorageRepository ??= StorageRepository());
 
   Future<StorageObjectMetadata> loadObjectMetadata(String storagePath) async {
-    _validateStoragePath(storagePath);
+    validateStoragePath(storagePath);
 
     try {
       return await _storage.loadObjectMetadata(storagePath);
@@ -46,7 +46,7 @@ class StorageService {
     String storagePath,
     File destination,
   ) async {
-    _validateStoragePath(storagePath);
+    validateStoragePath(storagePath);
 
     try {
       final metadata = await _storage.loadObjectMetadata(storagePath);
@@ -68,7 +68,7 @@ class StorageService {
     String storagePath,
     File destination,
   ) async {
-    _validateStoragePath(storagePath);
+    validateStoragePath(storagePath);
 
     try {
       final metadata = await _storage.loadObjectMetadata(storagePath);
@@ -86,7 +86,7 @@ class StorageService {
     }
   }
 
-  void _validateStoragePath(String storagePath) {
+  void validateStoragePath(String storagePath) {
     if (storagePath.trim().isEmpty) {
       throw const StorageFailure(
         'تعذر تحديد ملف المورد.',

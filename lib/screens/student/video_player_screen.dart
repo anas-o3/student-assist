@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../app/theme.dart';
 import '../../models/resource.dart';
+import '../../services/video_download_service.dart';
 import '../../services/video_service.dart';
 
 abstract class VideoPlaybackController {
@@ -34,11 +35,13 @@ class VideoPlayerScreen extends StatefulWidget {
     super.key,
     required this.resource,
     this.videoService,
+    this.videoDownloadService,
     this.controllerFactory,
   });
 
   final Resource resource;
   final VideoService? videoService;
+  final VideoDownloadService? videoDownloadService;
   final VideoPlaybackControllerFactory? controllerFactory;
 
   @override
@@ -47,6 +50,7 @@ class VideoPlayerScreen extends StatefulWidget {
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   VideoService? _defaultVideoService;
+  VideoDownloadService? _defaultVideoDownloadService;
   VideoPlaybackSource? _source;
   VideoPlaybackController? _controller;
   String? _errorMessage;
@@ -54,6 +58,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   VideoService get _videoService =>
       widget.videoService ?? (_defaultVideoService ??= VideoService());
+  VideoDownloadService get _videoDownloadService =>
+      widget.videoDownloadService ??
+      (_defaultVideoDownloadService ??= VideoDownloadService());
 
   @override
   void initState() {
@@ -72,7 +79,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     await _releasePlayback();
 
     try {
-      final source = await _videoService.prepareOnlineVideo(widget.resource);
+      final source = await _preparePreferredSource();
       if (!mounted) {
         await source.dispose();
         return;
@@ -106,6 +113,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         _errorMessage = 'تعذر تشغيل الفيديو. حاول مرة أخرى.';
       });
     }
+  }
+
+  Future<VideoPlaybackSource> _preparePreferredSource() async {
+    try {
+      final persistentFile = await _videoDownloadService.findDownloadedVideo(
+        widget.resource,
+      );
+      if (persistentFile != null) {
+        return VideoPlaybackSource.persistent(persistentFile);
+      }
+    } on VideoDownloadFailure {
+      // A local lookup problem must not break authenticated online playback.
+    }
+
+    return _videoService.prepareOnlineVideo(widget.resource);
   }
 
   void _onPlaybackChanged() {

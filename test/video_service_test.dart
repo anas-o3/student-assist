@@ -161,6 +161,19 @@ void main() {
       expect(await createdFolder!.exists(), isFalse);
     },
   );
+
+  test('persistent playback source does not delete its video', () async {
+    final folder = await Directory.systemTemp.createTemp(
+      'student_assist_persistent_video_source_test_',
+    );
+    final file = File('${folder.path}/video.mp4')..writeAsBytesSync(const [1]);
+    final source = VideoPlaybackSource.persistent(file);
+
+    await source.dispose();
+
+    expect(await file.exists(), isTrue);
+    await folder.delete(recursive: true);
+  });
 }
 
 Future<Directory> _createTemporaryFolder() async {

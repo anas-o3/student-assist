@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:student_assist/app/theme.dart';
 import 'package:student_assist/models/resource.dart';
 import 'package:student_assist/screens/student/video_player_screen.dart';
+import 'package:student_assist/services/video_download_service.dart';
 import 'package:student_assist/services/video_service.dart';
 
 void main() {
@@ -207,12 +208,52 @@ void main() {
     expect(find.textContaining('PDF'), findsNothing);
     expect(find.byIcon(Icons.download_rounded), findsNothing);
   });
+
+  testWidgets(
+    'prefers a persistent local video without online Storage access',
+    (tester) async {
+      final folder = Directory.systemTemp.createTempSync(
+        'student_assist_persistent_video_player_test_',
+      );
+      final persistentFile = File('${folder.path}/video.mp4')
+        ..writeAsBytesSync(const [1, 2, 3]);
+      var onlineCalls = 0;
+      File? controllerFile;
+
+      await _pumpScreen(
+        tester,
+        videoService: _FakeVideoService((_) async {
+          onlineCalls++;
+          return _FakeSource();
+        }),
+        videoDownloadService: _FakeVideoDownloadService(
+          findDownloaded: (_) async => persistentFile,
+        ),
+        controllerFactory: (file) {
+          controllerFile = file;
+          return _FakeController();
+        },
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byKey(const ValueKey('video-ready')), findsOneWidget);
+      expect(controllerFile?.path, persistentFile.path);
+      expect(onlineCalls, 0);
+
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pump();
+      expect(persistentFile.existsSync(), isTrue);
+      folder.deleteSync(recursive: true);
+    },
+  );
 }
 
 Future<void> _pumpScreen(
   WidgetTester tester, {
   Resource? resource,
   required VideoService videoService,
+  VideoDownloadService? videoDownloadService,
   required VideoPlaybackControllerFactory controllerFactory,
 }) async {
   await tester.pumpWidget(
@@ -221,6 +262,9 @@ Future<void> _pumpScreen(
       home: VideoPlayerScreen(
         resource: resource ?? _resource(),
         videoService: videoService,
+        videoDownloadService:
+            videoDownloadService ??
+            _FakeVideoDownloadService(findDownloaded: (_) async => null),
         controllerFactory: controllerFactory,
       ),
     ),
@@ -250,6 +294,16 @@ class _FakeVideoService extends VideoService {
   Future<VideoPlaybackSource> prepareOnlineVideo(Resource resource) {
     return loader(resource);
   }
+}
+
+class _FakeVideoDownloadService extends VideoDownloadService {
+  _FakeVideoDownloadService({required this.findDownloaded});
+
+  final Future<File?> Function(Resource resource) findDownloaded;
+
+  @override
+  Future<File?> findDownloadedVideo(Resource resource) =>
+      findDownloaded(resource);
 }
 
 class _FakeSource extends VideoPlaybackSource {

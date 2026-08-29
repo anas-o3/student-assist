@@ -5,6 +5,7 @@ import '../../models/lesson.dart';
 import '../../models/resource.dart';
 import '../../services/pdf_download_service.dart';
 import '../../services/resource_service.dart';
+import '../../services/video_download_service.dart';
 import '../../widgets/app_logo.dart';
 import 'pdf_viewer_screen.dart';
 import 'video_player_screen.dart';
@@ -15,11 +16,13 @@ class LessonContentScreen extends StatefulWidget {
     required this.lesson,
     this.resourceService,
     this.pdfDownloadService,
+    this.videoDownloadService,
   });
 
   final Lesson lesson;
   final ResourceService? resourceService;
   final PdfDownloadService? pdfDownloadService;
+  final VideoDownloadService? videoDownloadService;
 
   @override
   State<LessonContentScreen> createState() => _LessonContentScreenState();
@@ -28,8 +31,10 @@ class LessonContentScreen extends StatefulWidget {
 class _LessonContentScreenState extends State<LessonContentScreen> {
   ResourceService? _defaultResourceService;
   PdfDownloadService? _defaultPdfDownloadService;
+  VideoDownloadService? _defaultVideoDownloadService;
   List<Resource> _resources = const [];
   final Map<String, _PdfDownloadState> _pdfDownloadStates = {};
+  final Map<String, _VideoDownloadState> _videoDownloadStates = {};
   String? _loadError;
   bool _isLoading = true;
 
@@ -38,6 +43,9 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
   PdfDownloadService get _pdfDownloadService =>
       widget.pdfDownloadService ??
       (_defaultPdfDownloadService ??= PdfDownloadService());
+  VideoDownloadService get _videoDownloadService =>
+      widget.videoDownloadService ??
+      (_defaultVideoDownloadService ??= VideoDownloadService());
 
   @override
   void initState() {
@@ -186,7 +194,9 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
       resources: _resources,
       onVideoTap: _openVideo,
       onPdfTap: _openPdf,
+      onVideoDownload: _downloadVideo,
       onPdfDownload: _downloadPdf,
+      videoDownloadStates: _videoDownloadStates,
       pdfDownloadStates: _pdfDownloadStates,
     );
   }
@@ -194,7 +204,10 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
   void _openVideo(Resource resource) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => VideoPlayerScreen(resource: resource),
+        builder: (_) => VideoPlayerScreen(
+          resource: resource,
+          videoDownloadService: _videoDownloadService,
+        ),
       ),
     );
   }
@@ -253,6 +266,51 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
     }
   }
 
+  Future<void> _downloadVideo(Resource resource) async {
+    if (_videoDownloadStates[resource.resourceId] ==
+        _VideoDownloadState.downloading) {
+      return;
+    }
+
+    setState(() {
+      _videoDownloadStates[resource.resourceId] =
+          _VideoDownloadState.downloading;
+    });
+
+    try {
+      final result = await _videoDownloadService.downloadVideo(resource);
+      if (!mounted) return;
+      setState(() {
+        _videoDownloadStates[resource.resourceId] =
+            _VideoDownloadState.downloaded;
+      });
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.removeCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.wasAlreadyDownloaded
+                ? 'الفيديو محفوظ مسبقًا على الجهاز.'
+                : 'تم تنزيل الفيديو بنجاح.',
+          ),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+    } on VideoDownloadFailure catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _videoDownloadStates[resource.resourceId] = _VideoDownloadState.failed;
+      });
+      _showDownloadError(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _videoDownloadStates[resource.resourceId] = _VideoDownloadState.failed;
+      });
+      _showDownloadError('تعذر تنزيل ملف الفيديو. حاول مرة أخرى.');
+    }
+  }
+
   void _showDownloadError(String message) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.removeCurrentSnackBar();
@@ -264,20 +322,26 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
 
 enum _PdfDownloadState { downloading, downloaded, failed }
 
+enum _VideoDownloadState { downloading, downloaded, failed }
+
 class _ResourceList extends StatelessWidget {
   const _ResourceList({
     super.key,
     required this.resources,
     required this.onVideoTap,
     required this.onPdfTap,
+    required this.onVideoDownload,
     required this.onPdfDownload,
+    required this.videoDownloadStates,
     required this.pdfDownloadStates,
   });
 
   final List<Resource> resources;
   final ValueChanged<Resource> onVideoTap;
   final ValueChanged<Resource> onPdfTap;
+  final ValueChanged<Resource> onVideoDownload;
   final ValueChanged<Resource> onPdfDownload;
+  final Map<String, _VideoDownloadState> videoDownloadStates;
   final Map<String, _PdfDownloadState> pdfDownloadStates;
 
   @override
@@ -296,6 +360,11 @@ class _ResourceList extends StatelessWidget {
                 ? () => onPdfDownload(resources[index])
                 : null,
             downloadState: pdfDownloadStates[resources[index].resourceId],
+            onVideoDownload: resources[index].type == 'video'
+                ? () => onVideoDownload(resources[index])
+                : null,
+            videoDownloadState:
+                videoDownloadStates[resources[index].resourceId],
           ),
           if (index != resources.length - 1) const SizedBox(height: 10),
         ],
@@ -310,12 +379,16 @@ class _ResourceCard extends StatelessWidget {
     this.onTap,
     this.onDownload,
     this.downloadState,
+    this.onVideoDownload,
+    this.videoDownloadState,
   });
 
   final Resource resource;
   final VoidCallback? onTap;
   final VoidCallback? onDownload;
   final _PdfDownloadState? downloadState;
+  final VoidCallback? onVideoDownload;
+  final _VideoDownloadState? videoDownloadState;
 
   @override
   Widget build(BuildContext context) {
@@ -375,6 +448,14 @@ class _ResourceCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (isVideo && onVideoDownload != null) ...[
+                const SizedBox(width: 8),
+                _VideoDownloadButton(
+                  resourceId: resource.resourceId,
+                  state: videoDownloadState,
+                  onPressed: onVideoDownload!,
+                ),
+              ],
               if (!isVideo && onDownload != null) ...[
                 const SizedBox(width: 8),
                 _PdfDownloadButton(
@@ -426,6 +507,47 @@ class _PdfDownloadButton extends StatelessWidget {
         icon: isDownloading
             ? const SizedBox(
                 key: Key('pdf-download-progress'),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.2),
+              )
+            : Icon(
+                isDownloaded
+                    ? Icons.download_done_rounded
+                    : Icons.download_rounded,
+              ),
+      ),
+    );
+  }
+}
+
+class _VideoDownloadButton extends StatelessWidget {
+  const _VideoDownloadButton({
+    required this.resourceId,
+    required this.state,
+    required this.onPressed,
+  });
+
+  final String resourceId;
+  final _VideoDownloadState? state;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDownloading = state == _VideoDownloadState.downloading;
+    final isDownloaded = state == _VideoDownloadState.downloaded;
+
+    return Semantics(
+      button: true,
+      label: isDownloaded ? 'تم تنزيل الفيديو' : 'تنزيل الفيديو',
+      child: IconButton(
+        key: Key('download-video-$resourceId'),
+        tooltip: isDownloaded ? 'تم التنزيل' : 'تنزيل',
+        onPressed: isDownloading ? null : onPressed,
+        color: isDownloaded ? AppTheme.success : AppTheme.primary,
+        icon: isDownloading
+            ? const SizedBox(
+                key: Key('video-download-progress'),
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2.2),

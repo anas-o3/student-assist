@@ -11,6 +11,7 @@ import 'package:student_assist/screens/student/pdf_viewer_screen.dart';
 import 'package:student_assist/screens/student/video_player_screen.dart';
 import 'package:student_assist/services/pdf_download_service.dart';
 import 'package:student_assist/services/resource_service.dart';
+import 'package:student_assist/services/video_download_service.dart';
 
 void main() {
   testWidgets('keeps the selected lesson title and explanation visible', (
@@ -79,9 +80,74 @@ void main() {
     expect(find.text('ملخص PDF'), findsOneWidget);
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
     expect(find.byKey(const Key('download-pdf-pdf-1')), findsOneWidget);
+    expect(find.byKey(const Key('download-video-video-1')), findsOneWidget);
   });
 
-  testWidgets('video resources have no PDF download action', (tester) async {
+  testWidgets('video and PDF expose only their matching download actions', (
+    tester,
+  ) async {
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'video-1',
+            title: 'شرح مرئي',
+            type: 'video',
+            order: 1,
+          ),
+          _resource(resourceId: 'pdf-1', title: 'ملخص', type: 'pdf', order: 2),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('download-pdf-video-1')), findsNothing);
+    expect(find.byKey(const Key('download-video-video-1')), findsOneWidget);
+    expect(find.byKey(const Key('download-video-pdf-1')), findsNothing);
+    expect(find.byKey(const Key('download-pdf-pdf-1')), findsOneWidget);
+  });
+
+  testWidgets('downloads a video separately and shows success', (tester) async {
+    final video = _resource(
+      resourceId: 'video-1',
+      title: 'شرح مرئي',
+      type: 'video',
+      order: 1,
+    );
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_video_ui_test_',
+    );
+    final file = File('${folder.path}/video.mp4')..writeAsBytesSync(const [1]);
+    var calls = 0;
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService((_) async => [video]),
+      videoDownloadService: _FakeVideoDownloadService((_) async {
+        calls++;
+        return VideoDownloadResult(file: file, wasAlreadyDownloaded: false);
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('download-video-video-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(calls, 1);
+    expect(find.text('تم تنزيل الفيديو بنجاح.'), findsOneWidget);
+    expect(find.byType(VideoPlayerScreen), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+    folder.deleteSync(recursive: true);
+  });
+
+  testWidgets('reports when a persistent video is already available', (
+    tester,
+  ) async {
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_existing_video_ui_test_',
+    );
+    final file = File('${folder.path}/video.mp4')..writeAsBytesSync(const [1]);
     await _pumpScreen(
       tester,
       resourceService: _FakeResourceService(
@@ -94,11 +160,152 @@ void main() {
           ),
         ],
       ),
+      videoDownloadService: _FakeVideoDownloadService(
+        (_) async =>
+            VideoDownloadResult(file: file, wasAlreadyDownloaded: true),
+      ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('download-pdf-video-1')), findsNothing);
-    expect(find.byIcon(Icons.download_rounded), findsNothing);
+    await tester.tap(find.byKey(const Key('download-video-video-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('الفيديو محفوظ مسبقًا على الجهاز.'), findsOneWidget);
+    expect(find.byIcon(Icons.download_done_rounded), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    folder.deleteSync(recursive: true);
+  });
+
+  testWidgets('prevents repeated video submission while downloading', (
+    tester,
+  ) async {
+    final completer = Completer<VideoDownloadResult>();
+    var calls = 0;
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'video-1',
+            title: 'شرح مرئي',
+            type: 'video',
+            order: 1,
+          ),
+        ],
+      ),
+      videoDownloadService: _FakeVideoDownloadService((_) {
+        calls++;
+        return completer.future;
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.byKey(const Key('download-video-video-1'));
+    await tester.tap(button);
+    await tester.pump();
+    await tester.tap(button, warnIfMissed: false);
+    await tester.pump();
+
+    expect(calls, 1);
+    expect(find.byKey(const Key('video-download-progress')), findsOneWidget);
+
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_video_pending_ui_test_',
+    );
+    final file = File('${folder.path}/video.mp4')..writeAsBytesSync(const [1]);
+    completer.complete(
+      VideoDownloadResult(file: file, wasAlreadyDownloaded: false),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(seconds: 5));
+    folder.deleteSync(recursive: true);
+  });
+
+  testWidgets('video completion after disposal does not update old screen', (
+    tester,
+  ) async {
+    final completer = Completer<VideoDownloadResult>();
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'video-1',
+            title: 'شرح مرئي',
+            type: 'video',
+            order: 1,
+          ),
+        ],
+      ),
+      videoDownloadService: _FakeVideoDownloadService((_) => completer.future),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('download-video-video-1')));
+    await tester.pump();
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_video_disposed_ui_test_',
+    );
+    final file = File('${folder.path}/video.mp4')..writeAsBytesSync(const [1]);
+    completer.complete(
+      VideoDownloadResult(file: file, wasAlreadyDownloaded: false),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    folder.deleteSync(recursive: true);
+  });
+
+  testWidgets('shows a safe video download error and allows retry', (
+    tester,
+  ) async {
+    var attempts = 0;
+    final folder = Directory.systemTemp.createTempSync(
+      'student_assist_video_retry_ui_test_',
+    );
+    final file = File('${folder.path}/video.mp4')..writeAsBytesSync(const [1]);
+    await _pumpScreen(
+      tester,
+      resourceService: _FakeResourceService(
+        (_) async => [
+          _resource(
+            resourceId: 'video-1',
+            title: 'شرح مرئي',
+            type: 'video',
+            order: 1,
+          ),
+        ],
+      ),
+      videoDownloadService: _FakeVideoDownloadService((_) async {
+        attempts++;
+        if (attempts == 1) {
+          throw const VideoDownloadFailure(
+            'تعذر تنزيل ملف الفيديو. حاول مرة أخرى.',
+            VideoDownloadFailureReason.backend,
+          );
+        }
+        return VideoDownloadResult(file: file, wasAlreadyDownloaded: false);
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.byKey(const Key('download-video-video-1'));
+    await tester.tap(button);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('تعذر تنزيل ملف الفيديو. حاول مرة أخرى.'), findsOneWidget);
+    expect(find.textContaining('Firebase'), findsNothing);
+
+    await tester.tap(button);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(attempts, 2);
+    expect(find.text('تم تنزيل الفيديو بنجاح.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    folder.deleteSync(recursive: true);
   });
 
   testWidgets('video card opens VideoPlayerScreen with the selected Resource', (
@@ -539,6 +746,7 @@ Future<void> _pumpScreen(
   Lesson? lesson,
   required ResourceService resourceService,
   PdfDownloadService? pdfDownloadService,
+  VideoDownloadService? videoDownloadService,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -552,6 +760,14 @@ Future<void> _pumpScreen(
               (_) async => throw const PdfDownloadFailure(
                 'تعذر تنزيل ملف PDF. حاول مرة أخرى.',
                 PdfDownloadFailureReason.backend,
+              ),
+            ),
+        videoDownloadService:
+            videoDownloadService ??
+            _FakeVideoDownloadService(
+              (_) async => throw const VideoDownloadFailure(
+                'تعذر تنزيل ملف الفيديو. حاول مرة أخرى.',
+                VideoDownloadFailureReason.backend,
               ),
             ),
       ),
@@ -616,4 +832,17 @@ class _FakePdfDownloadService extends PdfDownloadService {
 
   @override
   Future<File?> findDownloadedPdf(Resource resource) async => null;
+}
+
+class _FakeVideoDownloadService extends VideoDownloadService {
+  _FakeVideoDownloadService(this.downloader);
+
+  final Future<VideoDownloadResult> Function(Resource resource) downloader;
+
+  @override
+  Future<VideoDownloadResult> downloadVideo(Resource resource) =>
+      downloader(resource);
+
+  @override
+  Future<File?> findDownloadedVideo(Resource resource) async => null;
 }

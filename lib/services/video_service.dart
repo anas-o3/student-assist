@@ -25,13 +25,17 @@ class VideoFailure implements Exception {
 class VideoPlaybackSource {
   VideoPlaybackSource(this.file, this._temporaryFolder);
 
+  VideoPlaybackSource.persistent(this.file) : _temporaryFolder = null;
+
   final File file;
-  final Directory _temporaryFolder;
+  final Directory? _temporaryFolder;
 
   Future<void> dispose() async {
+    final temporaryFolder = _temporaryFolder;
+    if (temporaryFolder == null) return;
     try {
-      if (await _temporaryFolder.exists()) {
-        await _temporaryFolder.delete(recursive: true);
+      if (await temporaryFolder.exists()) {
+        await temporaryFolder.delete(recursive: true);
       }
     } on FileSystemException {
       // Temporary cleanup is best-effort and must not surface raw file errors.

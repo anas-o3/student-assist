@@ -29,7 +29,12 @@ const questionId = 'question-math-g1-ch1-l1-1';
 
 let testEnvironment;
 
-async function seedAcademicFixture({ userGradeId = gradeId } = {}) {
+async function seedAcademicFixture({
+  userGradeId = gradeId,
+  subjectIsActive = true,
+  chapterIsActive = true,
+  lessonIsActive = true,
+} = {}) {
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     const database = context.firestore();
     await setDoc(doc(database, 'users', studentUid), {
@@ -45,17 +50,17 @@ async function seedAcademicFixture({ userGradeId = gradeId } = {}) {
     await setDoc(doc(database, 'subjects', subjectId), {
       subjectId,
       gradeId,
-      isActive: true,
+      isActive: subjectIsActive,
     });
     await setDoc(doc(database, 'chapters', chapterId), {
       chapterId,
       subjectId,
-      isActive: true,
+      isActive: chapterIsActive,
     });
     await setDoc(doc(database, 'lessons', lessonId), {
       lessonId,
       chapterId,
-      isActive: true,
+      isActive: lessonIsActive,
     });
     await setDoc(doc(database, 'questions', questionId), {
       questionId,
@@ -127,6 +132,24 @@ test('denies a question query when the student grade does not match', async () =
   await assertFails(getDocs(activeQuestionQuery(studentFirestore())));
 });
 
+test('denies a question query when the referenced Lesson is inactive', async () => {
+  await seedAcademicFixture({ lessonIsActive: false });
+
+  await assertFails(getDocs(activeQuestionQuery(studentFirestore())));
+});
+
+test('denies a question query when the referenced Chapter is inactive', async () => {
+  await seedAcademicFixture({ chapterIsActive: false });
+
+  await assertFails(getDocs(activeQuestionQuery(studentFirestore())));
+});
+
+test('denies a question query when the referenced Subject is inactive', async () => {
+  await seedAcademicFixture({ subjectIsActive: false });
+
+  await assertFails(getDocs(activeQuestionQuery(studentFirestore())));
+});
+
 test('denies student question creation', async () => {
   await seedAcademicFixture();
 
@@ -164,6 +187,21 @@ test('allows an eligible student to create their own valid attempt', async () =>
       doc(studentFirestore(), 'quizAttempts', attemptId),
       validAttempt(attemptId),
     ),
+  );
+});
+
+test('allows a student to read their own attempt', async () => {
+  await seedAcademicFixture();
+  const attemptId = 'attempt-readable-own';
+  await testEnvironment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'quizAttempts', attemptId), {
+      ...validAttempt(attemptId),
+      completedAt: new Date(),
+    });
+  });
+
+  await assertSucceeds(
+    getDoc(doc(studentFirestore(), 'quizAttempts', attemptId)),
   );
 });
 

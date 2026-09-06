@@ -3,6 +3,64 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     match /student-content/grades/{gradeId}/subjects/{subjectId}/chapters/{chapterId}/lessons/{lessonId}/resources/{resourceId}/{fileName} {
+      function expectedStoragePath() {
+        return 'student-content/grades/' + gradeId
+               + '/subjects/' + subjectId
+               + '/chapters/' + chapterId
+               + '/lessons/' + lessonId
+               + '/resources/' + resourceId
+               + '/' + fileName;
+      }
+
+      function isTrustedAdmin() {
+        return request.auth != null
+               && request.auth.token.keys().hasAll(['admin'])
+               && request.auth.token.admin == true
+               && firestore.get(
+                 /databases/(default)/documents/users/$(request.auth.uid)
+               ) != null
+               && firestore.get(
+                 /databases/(default)/documents/users/$(request.auth.uid)
+               ).data.userId == request.auth.uid
+               && firestore.get(
+                 /databases/(default)/documents/users/$(request.auth.uid)
+               ).data.role == 'admin';
+      }
+
+      function resourceMatchesPath() {
+        let resourceDocument = firestore.get(
+          /databases/(default)/documents/resources/$(resourceId)
+        );
+
+        return resourceDocument != null
+               && resourceDocument.data.resourceId == resourceId
+               && resourceDocument.data.lessonId == lessonId
+               && resourceDocument.data.storagePath == expectedStoragePath()
+               && (
+                 resourceDocument.data.type == 'video'
+                 || resourceDocument.data.type == 'pdf'
+               );
+      }
+
+      function incomingContentTypeIsValid() {
+        let resourceDocument = firestore.get(
+          /databases/(default)/documents/resources/$(resourceId)
+        );
+
+        return request.resource != null
+               && request.resource.contentType is string
+               && (
+                 (
+                   resourceDocument.data.type == 'video'
+                   && request.resource.contentType.matches('video/.*')
+                 )
+                 || (
+                   resourceDocument.data.type == 'pdf'
+                   && request.resource.contentType == 'application/pdf'
+                 )
+               );
+      }
+
       function userCanReadGrade() {
         let userDocument = firestore.get(
           /databases/(default)/documents/users/$(request.auth.uid)
@@ -42,9 +100,16 @@ service firebase.storage {
                  && userCanReadGrade()
                  && resourceAllowsRead();
 
-      // Listing and all client writes remain closed. Admin upload support is
-      // intentionally deferred until a trusted upload flow is implemented.
-      allow list, write: if false;
+      // A trusted Admin may write only an object backed by matching Resource
+      // metadata at the exact approved academic path and MIME type.
+      allow create, update: if isTrustedAdmin()
+                            && resourceMatchesPath()
+                            && incomingContentTypeIsValid();
+      // Logical deletion retains the object; physical cleanup is deferred.
+      allow delete: if false;
+
+      // Admin screens use Firestore metadata; directory listing stays closed.
+      allow list: if false;
     }
 
     match /{allPaths=**} {

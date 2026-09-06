@@ -2,6 +2,163 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Admin authority is granted only when a trusted server/Admin SDK has set
+    // the Firebase Auth custom claim and provisioned the matching protected
+    // user profile. Neither value can be assigned by public registration.
+    function isTrustedAdmin() {
+      return request.auth != null
+             && request.auth.token.keys().hasAll(['admin'])
+             && request.auth.token.admin == true
+             && exists(
+               /databases/$(database)/documents/users/$(request.auth.uid)
+             )
+             && get(
+               /databases/$(database)/documents/users/$(request.auth.uid)
+             ).data.userId == request.auth.uid
+             && get(
+               /databases/$(database)/documents/users/$(request.auth.uid)
+             ).data.role == 'admin';
+    }
+
+    function hasExactKeys(data, keys) {
+      return data.keys().hasAll(keys) && data.keys().hasOnly(keys);
+    }
+
+    function isNonEmptyString(value) {
+      return value is string && value.size() > 0;
+    }
+
+    function validGrade(data, gradeId) {
+      return hasExactKeys(data, ['gradeId', 'name', 'order', 'isActive'])
+             && data.gradeId == gradeId
+             && isNonEmptyString(data.gradeId)
+             && isNonEmptyString(data.name)
+             && data.order is int
+             && data.isActive is bool;
+    }
+
+    function validSubject(data, subjectId) {
+      return hasExactKeys(
+               data,
+               ['subjectId', 'name', 'gradeId', 'imageUrl', 'order', 'isActive']
+             )
+             && data.subjectId == subjectId
+             && isNonEmptyString(data.subjectId)
+             && isNonEmptyString(data.name)
+             && isNonEmptyString(data.gradeId)
+             && data.imageUrl is string
+             && data.order is int
+             && data.isActive is bool
+             && exists(
+               /databases/$(database)/documents/grades/$(data.gradeId)
+             );
+    }
+
+    function validChapter(data, chapterId) {
+      return hasExactKeys(
+               data,
+               ['chapterId', 'title', 'subjectId', 'order', 'isActive']
+             )
+             && data.chapterId == chapterId
+             && isNonEmptyString(data.chapterId)
+             && isNonEmptyString(data.title)
+             && isNonEmptyString(data.subjectId)
+             && data.order is int
+             && data.isActive is bool
+             && exists(
+               /databases/$(database)/documents/subjects/$(data.subjectId)
+             );
+    }
+
+    function validLesson(data, lessonId) {
+      return hasExactKeys(
+               data,
+               [
+                 'lessonId',
+                 'title',
+                 'chapterId',
+                 'explanation',
+                 'order',
+                 'isActive',
+                 'createdAt',
+                 'updatedAt'
+               ]
+             )
+             && data.lessonId == lessonId
+             && isNonEmptyString(data.lessonId)
+             && isNonEmptyString(data.title)
+             && isNonEmptyString(data.chapterId)
+             && isNonEmptyString(data.explanation)
+             && data.order is int
+             && data.isActive is bool
+             && data.createdAt is timestamp
+             && data.updatedAt is timestamp
+             && exists(
+               /databases/$(database)/documents/chapters/$(data.chapterId)
+             );
+    }
+
+    function validQuestion(data, questionId) {
+      return hasExactKeys(
+               data,
+               [
+                 'questionId',
+                 'lessonId',
+                 'questionText',
+                 'options',
+                 'correctAnswerIndex',
+                 'explanation',
+                 'order',
+                 'isActive'
+               ]
+             )
+             && data.questionId == questionId
+             && isNonEmptyString(data.questionId)
+             && isNonEmptyString(data.lessonId)
+             && isNonEmptyString(data.questionText)
+             && data.options is list
+             && data.options.size() > 0
+             && data.correctAnswerIndex is int
+             && data.correctAnswerIndex >= 0
+             && data.correctAnswerIndex < data.options.size()
+             && isNonEmptyString(data.explanation)
+             && data.order is int
+             && data.isActive is bool
+             && exists(
+               /databases/$(database)/documents/lessons/$(data.lessonId)
+             );
+    }
+
+    function validResource(data, resourceId) {
+      return hasExactKeys(
+               data,
+               [
+                 'resourceId',
+                 'lessonId',
+                 'title',
+                 'type',
+                 'url',
+                 'storagePath',
+                 'order',
+                 'isActive',
+                 'createdAt'
+               ]
+             )
+             && data.resourceId == resourceId
+             && isNonEmptyString(data.resourceId)
+             && isNonEmptyString(data.lessonId)
+             && isNonEmptyString(data.title)
+             && (data.type == 'video' || data.type == 'pdf')
+             && data.url is string
+             && isNonEmptyString(data.storagePath)
+             && data.order is int
+             && data.isActive is bool
+             && data.createdAt is timestamp
+             && exists(
+               /databases/$(database)/documents/lessons/$(data.lessonId)
+             );
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null
                   && request.auth.uid == userId;
@@ -57,52 +214,66 @@ service cloud.firestore {
     }
 
     match /grades/{gradeId} {
-      allow read: if request.auth != null
-                  && resource.data.isActive == true;
+      allow read: if isTrustedAdmin()
+                  || (request.auth != null
+                      && resource.data.isActive == true);
 
-      // Grade management by administrators is intentionally deferred.
-      allow create, update, delete: if false;
+      allow create: if isTrustedAdmin()
+                    && validGrade(request.resource.data, gradeId);
+      allow update: if isTrustedAdmin()
+                    && validGrade(request.resource.data, gradeId);
+      // Hard-delete semantics are not defined by the approved design.
+      allow delete: if false;
     }
 
     match /subjects/{subjectId} {
-      allow read: if request.auth != null
-                  && resource.data.isActive == true
-                  && exists(
-                    /databases/$(database)/documents/users/$(request.auth.uid)
-                  )
-                  && get(
-                    /databases/$(database)/documents/users/$(request.auth.uid)
-                  ).data.gradeId == resource.data.gradeId;
+      allow read: if isTrustedAdmin()
+                  || (request.auth != null
+                      && resource.data.isActive == true
+                      && exists(
+                        /databases/$(database)/documents/users/$(request.auth.uid)
+                      )
+                      && get(
+                        /databases/$(database)/documents/users/$(request.auth.uid)
+                      ).data.gradeId == resource.data.gradeId);
 
-      // Subject management by administrators is intentionally deferred.
-      allow create, update, delete: if false;
+      allow create: if isTrustedAdmin()
+                    && validSubject(request.resource.data, subjectId);
+      allow update: if isTrustedAdmin()
+                    && validSubject(request.resource.data, subjectId);
+      allow delete: if false;
     }
 
     match /chapters/{chapterId} {
-      allow read: if request.auth != null
-                  && resource.data.isActive == true
-                  && resource.data.subjectId is string
-                  && exists(
-                    /databases/$(database)/documents/users/$(request.auth.uid)
-                  )
-                  && exists(
-                    /databases/$(database)/documents/subjects/$(resource.data.subjectId)
-                  )
-                  && get(
-                    /databases/$(database)/documents/subjects/$(resource.data.subjectId)
-                  ).data.isActive == true
-                  && get(
-                    /databases/$(database)/documents/subjects/$(resource.data.subjectId)
-                  ).data.gradeId == get(
-                    /databases/$(database)/documents/users/$(request.auth.uid)
-                  ).data.gradeId;
+      allow read: if isTrustedAdmin()
+                  || (request.auth != null
+                      && resource.data.isActive == true
+                      && resource.data.subjectId is string
+                      && exists(
+                        /databases/$(database)/documents/users/$(request.auth.uid)
+                      )
+                      && exists(
+                        /databases/$(database)/documents/subjects/$(resource.data.subjectId)
+                      )
+                      && get(
+                        /databases/$(database)/documents/subjects/$(resource.data.subjectId)
+                      ).data.isActive == true
+                      && get(
+                        /databases/$(database)/documents/subjects/$(resource.data.subjectId)
+                      ).data.gradeId == get(
+                        /databases/$(database)/documents/users/$(request.auth.uid)
+                      ).data.gradeId);
 
-      // Chapter management by administrators is intentionally deferred.
-      allow create, update, delete: if false;
+      allow create: if isTrustedAdmin()
+                    && validChapter(request.resource.data, chapterId);
+      allow update: if isTrustedAdmin()
+                    && validChapter(request.resource.data, chapterId);
+      allow delete: if false;
     }
 
     match /lessons/{lessonId} {
-      allow read: if request.auth != null
+      allow read: if isTrustedAdmin()
+                  || (request.auth != null
                   && resource.data.isActive == true
                   && resource.data.chapterId is string
                   && exists(
@@ -133,14 +304,22 @@ service cloud.firestore {
                     ).data.subjectId)
                   ).data.gradeId == get(
                     /databases/$(database)/documents/users/$(request.auth.uid)
-                  ).data.gradeId;
+                  ).data.gradeId);
 
-      // Lesson management by administrators is intentionally deferred.
-      allow create, update, delete: if false;
+      allow create: if isTrustedAdmin()
+                    && validLesson(request.resource.data, lessonId)
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if isTrustedAdmin()
+                    && validLesson(request.resource.data, lessonId)
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
     }
 
     match /resources/{resourceId} {
-      allow read: if request.auth != null
+      allow read: if isTrustedAdmin()
+                  || (request.auth != null
                   && resource.data.isActive == true
                   && resource.data.lessonId is string
                   && exists(
@@ -192,14 +371,20 @@ service cloud.firestore {
                     ).data.subjectId)
                   ).data.gradeId == get(
                     /databases/$(database)/documents/users/$(request.auth.uid)
-                  ).data.gradeId;
+                  ).data.gradeId);
 
-      // Resource management by administrators is intentionally deferred.
-      allow create, update, delete: if false;
+      allow create: if isTrustedAdmin()
+                    && validResource(request.resource.data, resourceId)
+                    && request.resource.data.createdAt == request.time;
+      allow update: if isTrustedAdmin()
+                    && validResource(request.resource.data, resourceId)
+                    && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
     }
 
     match /questions/{questionId} {
-      allow read: if request.auth != null
+      allow read: if isTrustedAdmin()
+                  || (request.auth != null
                   && resource.data.isActive == true
                   && resource.data.lessonId is string
                   && exists(
@@ -260,10 +445,13 @@ service cloud.firestore {
                     ).data.subjectId)
                   ).data.gradeId == get(
                     /databases/$(database)/documents/users/$(request.auth.uid)
-                  ).data.gradeId;
+                  ).data.gradeId);
 
-      // Question management by administrators is intentionally deferred.
-      allow create, update, delete: if false;
+      allow create: if isTrustedAdmin()
+                    && validQuestion(request.resource.data, questionId);
+      allow update: if isTrustedAdmin()
+                    && validQuestion(request.resource.data, questionId);
+      allow delete: if false;
     }
 
     match /quizAttempts/{attemptId} {

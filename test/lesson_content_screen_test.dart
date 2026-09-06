@@ -704,6 +704,29 @@ void main() {
     expect(directionality.textDirection, TextDirection.rtl);
   });
 
+  testWidgets('opens the quiz for the exact selected Lesson', (tester) async {
+    Lesson? capturedLesson;
+    final lesson = _lesson(title: 'درس الاختبار');
+    await _pumpScreen(
+      tester,
+      lesson: lesson,
+      resourceService: _FakeResourceService((_) async => const []),
+      quizScreenBuilder: (selectedLesson) {
+        capturedLesson = selectedLesson;
+        return const Scaffold(body: Text('شاشة الاختبار'));
+      },
+    );
+    await tester.pumpAndSettle();
+
+    final quizButton = find.byKey(const Key('open-lesson-quiz-button'));
+    await tester.ensureVisible(quizButton);
+    await tester.tap(quizButton);
+    await tester.pumpAndSettle();
+
+    expect(capturedLesson, same(lesson));
+    expect(find.text('شاشة الاختبار'), findsOneWidget);
+  });
+
   testWidgets('back returns from lesson content to the previous screen', (
     tester,
   ) async {
@@ -747,6 +770,7 @@ Future<void> _pumpScreen(
   required ResourceService resourceService,
   PdfDownloadService? pdfDownloadService,
   VideoDownloadService? videoDownloadService,
+  QuizScreenBuilder? quizScreenBuilder,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -770,6 +794,7 @@ Future<void> _pumpScreen(
                 VideoDownloadFailureReason.backend,
               ),
             ),
+        quizScreenBuilder: quizScreenBuilder,
       ),
     ),
   );

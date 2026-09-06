@@ -8,7 +8,10 @@ import '../../services/resource_service.dart';
 import '../../services/video_download_service.dart';
 import '../../widgets/app_logo.dart';
 import 'pdf_viewer_screen.dart';
+import 'quiz_screen.dart';
 import 'video_player_screen.dart';
+
+typedef QuizScreenBuilder = Widget Function(Lesson lesson);
 
 class LessonContentScreen extends StatefulWidget {
   const LessonContentScreen({
@@ -17,12 +20,14 @@ class LessonContentScreen extends StatefulWidget {
     this.resourceService,
     this.pdfDownloadService,
     this.videoDownloadService,
+    this.quizScreenBuilder,
   });
 
   final Lesson lesson;
   final ResourceService? resourceService;
   final PdfDownloadService? pdfDownloadService;
   final VideoDownloadService? videoDownloadService;
+  final QuizScreenBuilder? quizScreenBuilder;
 
   @override
   State<LessonContentScreen> createState() => _LessonContentScreenState();
@@ -140,6 +145,13 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
                             ),
                           ),
                           const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            key: const Key('open-lesson-quiz-button'),
+                            onPressed: _openQuiz,
+                            icon: const Icon(Icons.quiz_outlined),
+                            label: const Text('ابدأ اختبار الدرس'),
+                          ),
+                          const SizedBox(height: 24),
                           const Text(
                             'موارد الدرس',
                             key: Key('lesson-resources-heading'),
@@ -198,6 +210,16 @@ class _LessonContentScreenState extends State<LessonContentScreen> {
       onPdfDownload: _downloadPdf,
       videoDownloadStates: _videoDownloadStates,
       pdfDownloadStates: _pdfDownloadStates,
+    );
+  }
+
+  void _openQuiz() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            widget.quizScreenBuilder?.call(widget.lesson) ??
+            QuizScreen(lesson: widget.lesson),
+      ),
     );
   }
 
